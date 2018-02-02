@@ -1,3 +1,8 @@
+# OS-specific
+**/.DS_Store
+.TemporaryItems
+.Trashes
+
 # Prerequisites
 *.d
 
