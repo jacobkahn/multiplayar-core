@@ -3,6 +3,20 @@
 .TemporaryItems
 .Trashes
 
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Build and external deps
+build
+lib/*
+
+# Executables
+bin/*
+
 # Prerequisites
 *.d
 
