@@ -1,0 +1,4 @@
+server:
+  image: 'jacobkahn/multiplayar:latest'
+  ports:
+    - '18080'

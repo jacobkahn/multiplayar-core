@@ -19,6 +19,7 @@ Build the project with `CMake` and `make`.
 
 To the build project:
 ```
+mkdir build bin
 cd build
 cmake ..
 make

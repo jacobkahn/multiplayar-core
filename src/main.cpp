@@ -1,29 +1,61 @@
-#include <opencv2/opencv.hpp>
-#include <opencv2/xfeatures2d.hpp>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <iostream>
-#include <thread>
-#include "crow.h"
+#include <memory>
+#include <string>
+#include "include/server/Server.hpp"
 
-int main() {
-  /********** Sample opencv to make sure it links and builds **********/
-  const cv::Mat input =
-      cv::imread("image.jpg", 0); // Load as grayscale because yeah
+// Default port number
+const uint32_t kDefaultPort = 10000;
+// Max port number
+const uint32_t kMaxPortNumber = 65535;
 
-  // Detect
-  cv::Ptr<cv::Feature2D> f2d = cv::xfeatures2d::SiftFeatureDetector::create();
-  std::vector<cv::KeyPoint> keypoints;
-  f2d->detect(input, keypoints);
+int main(int argc, char* argv[]) {
+  /***** Parse command line args *****/
 
-  // Add results to image and save.
-  cv::Mat output;
-  cv::drawKeypoints(input, keypoints, output);
-  cv::imwrite("image-out.jpg", output);
+  // Port number for server bind
+  uint32_t port = kDefaultPort;
+  bool debugMode = false;
 
-  /********** Simple server **********/
-  // Start server
-  crow::SimpleApp app;
+  // Read in arguments
+  int c;
+  while ((c = getopt(argc, argv, "p:av")) != -1) {
+    switch (c) {
+      case 'p':
+        try {
+          port = std::stoi(optarg);
+        } catch (const std::exception&) {
+          std::cerr << "Invalid port number specified.\n";
+          return EXIT_FAILURE;
+        }
+        // Check port number in range
+        if (port > kMaxPortNumber) {
+          std::cerr << "Specified port out of range.\n";
+          return EXIT_FAILURE;
+        }
+        break;
+      case 'v':
+        debugMode = true;
+        break;
+      case '?':
+        if (optopt == 'c') {
+          fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+        } else if (isprint(optopt)) {
+          fprintf(stderr, "Unknown option `-%c'.\n", optopt);
+        } else {
+          fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
+        }
+        return EXIT_FAILURE;
+        break;
+      default:
+        std::cerr << "Invalid command line option specified.\n";
+        return EXIT_FAILURE;
+    }
+  }
 
-  CROW_ROUTE(app, "/")([]() { return "Hello world"; });
-
-  app.port(18080).multithreaded().run();
+  /******* Start Server *******/
+  auto server = std::make_unique<Server>();
+  server->setup();
+  server->run(port);
 }

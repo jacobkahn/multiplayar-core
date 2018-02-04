@@ -32,8 +32,29 @@ if (OpenCV_FOUND)
     TARGET_LINK_LIBRARIES(multiplayar-core ${OpenCV_LIBS})
 endif()
 
-# Include Crow explicitly
+# Include directory
 include_directories(${PROJECT_SOURCE_DIR}/include)
+
+########## Core Assets ##########
+# Server
+add_library(
+    server
+    src/server/Server.cpp
+)
+
+add_library(
+    environment
+    src/environment/Client.cpp
+    src/environment/Entity.cpp
+    src/environment/Environment.cpp
+    src/environment/Object.cpp
+)
+
+add_library(
+    cv
+    src/cv/SIFT.cpp
+)
+
 
 # Output
 set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/bin)
@@ -42,3 +63,11 @@ set(LIBRARY_OUTPUT_PATH ${CMAKE_SOURCE_DIR}/lib)
 
 # Includes from project
 include_directories("${PROJECT_SOURCE_DIR}")
+
+# Link dependencie with main executable
+target_link_libraries(
+    multiplayar-core
+    server
+    environment
+    cv
+)
