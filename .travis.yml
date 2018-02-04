@@ -1,0 +1,29 @@
+dist: trusty
+os:
+  - linux  
+# Enable C++ support
+language: cpp
+# Compiler selection
+compiler:
+  - clang
+  - gcc
+
+# Install dependencies
+before_install:
+  - sudo apt-get update
+  # Install Boost
+  - sudo apt-get install libboost-all-dev
+  # Download and install OpenCV
+  - wget https://github.com/opencv/opencv/archive/3.4.0.zip
+  - unzip 3.4.0.zip
+  - cd opencv-3.4.0
+  - mkdir build
+  - cd build
+  - cmake ..
+  - make -j4
+  - sudo make -j4 install
+# Build steps
+script:
+  - mkdir build
+  - cd build
+  - cmake .. && make
