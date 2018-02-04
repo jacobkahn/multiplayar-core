@@ -55,7 +55,6 @@ add_library(
     src/cv/SIFT.cpp
 )
 
-
 # Output
 set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR}/bin)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
@@ -70,4 +69,6 @@ target_link_libraries(
     server
     environment
     cv
+    -lpthread
+    -lm
 )
