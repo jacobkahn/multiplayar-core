@@ -1,6 +1,7 @@
 #include "include/server/Server.hpp"
 #include <sstream>
 #include <string>
+#include <fstream>
 #include <thread>
 #include "include/deps/crow.h"
 
@@ -30,6 +31,25 @@ void Server::setup() {
 
     crow::json::wvalue x;
     x["data"] = data;
+    return crow::response(x);
+  });
+
+  CROW_ROUTE(app, "/image").methods("POST"_method)([](const crow::request& req) {
+    // std::cout << "Req " << req.body << "\n";
+
+    // auto json = crow::json::load(req.body);
+    // if (!json) {
+    //   return crow::response(400);
+    // }
+    // auto data = json["image"];
+    // std::cout << "Image data\n\n\n" << data << "\n";
+
+    std::ofstream outStream("outServer.png");
+    outStream << req.body;
+    outStream.close();
+
+    crow::json::wvalue x;
+    x["data"] = "hi";
     return crow::response(x);
   });
 }
