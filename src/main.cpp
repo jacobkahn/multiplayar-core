@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include "include/server/Server.hpp"
+#include "include/cv/SIFT.hpp"
 
 // Default port number
 const uint32_t kDefaultPort = 10000;
@@ -20,7 +21,7 @@ int main(int argc, char* argv[]) {
 
   // Read in arguments
   int c;
-  while ((c = getopt(argc, argv, "p:av")) != -1) {
+  while ((c = getopt(argc, argv, "p:avs")) != -1) {
     switch (c) {
       case 'p':
         try {
@@ -38,6 +39,9 @@ int main(int argc, char* argv[]) {
       case 'v':
         debugMode = true;
         break;
+      case 's':
+        runSift();
+        return 0;
       case '?':
         if (optopt == 'c') {
           fprintf(stderr, "Option -%c requires an argument.\n", optopt);

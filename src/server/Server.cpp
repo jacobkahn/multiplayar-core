@@ -20,17 +20,16 @@ void Server::setup() {
     return x;
   });
 
-  CROW_ROUTE(app, "/post")
-      .methods("POST"_method)([](const crow::request& req) {
-        auto json = crow::json::load(req.body);
-        if (!json) {
-          return crow::response(400);
-        }
-        auto data = json["data"];
-        std::cout << "The user id is " << data << "\n";
+  CROW_ROUTE(app, "/post").methods("POST"_method)([](const crow::request& req) {
+    auto json = crow::json::load(req.body);
+    if (!json) {
+      return crow::response(400);
+    }
+    auto data = json["data"];
+    std::cout << "The user id is " << data << "\n";
 
-        crow::json::wvalue x;
-        x["data"] = data;
-        return crow::response(x);
-      });
+    crow::json::wvalue x;
+    x["data"] = data;
+    return crow::response(x);
+  });
 }
