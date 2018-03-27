@@ -32,6 +32,15 @@
         "__tree": "cpp",
         "bitset": "cpp",
         "utility": "cpp",
-        "iosfwd": "cpp"
+        "iosfwd": "cpp",
+        "__bit_reference": "cpp",
+        "fstream": "cpp",
+        "ratio": "cpp",
+        "__tuple": "cpp",
+        "tuple": "cpp",
+        "__string": "cpp",
+        "__functional_base": "cpp",
+        "future": "cpp",
+        "istream": "cpp"
     }
 }

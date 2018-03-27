@@ -7,5 +7,5 @@
  */
 class Object : public Entity {
  public:
-  Object(Location startLocation);
+  Object(EntityID id);
 };

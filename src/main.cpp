@@ -40,7 +40,8 @@ int main(int argc, char* argv[]) {
         debugMode = true;
         break;
       case 's':
-        runSift();
+        // Run Toy SIFT
+        std::make_unique<SIFTClient>()->runToySIFT();
         return 0;
       case '?':
         if (optopt == 'c') {

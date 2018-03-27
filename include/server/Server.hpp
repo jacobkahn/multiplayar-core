@@ -1,5 +1,6 @@
 #pragma once
 
+#include "include/environment/Environment.hpp"
 #include "include/deps/crow.h"
 
 /**
@@ -22,4 +23,6 @@ class Server {
  private:
   // App client for
   crow::SimpleApp app;
+  // The environment for this server instance
+  std::unique_ptr<Environment> environment_;
 };

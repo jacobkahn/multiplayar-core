@@ -1,8 +1,9 @@
 #include "include/server/Server.hpp"
+#include <fstream>
 #include <sstream>
 #include <string>
-#include <fstream>
 #include <thread>
+#include "include/cv/SIFT.hpp"
 #include "include/deps/crow.h"
 
 Server::Server() {}
@@ -34,22 +35,26 @@ void Server::setup() {
     return crow::response(x);
   });
 
-  CROW_ROUTE(app, "/image").methods("POST"_method)([](const crow::request& req) {
-    // std::cout << "Req " << req.body << "\n";
+  CROW_ROUTE(app, "/image")
+      .methods("POST"_method)([&](const crow::request& req) {
+        // Get user id and image from the request
+        std::string id =
+            req.headers.find("x-user-id")->second; // TODO: get the id
+        std::string image = req.body; // TODO: get the image
+        // Add a user to the environment or update an existing user
+        auto points = environment_->updateClient(id, image);
 
-    // auto json = crow::json::load(req.body);
-    // if (!json) {
-    //   return crow::response(400);
-    // }
-    // auto data = json["image"];
-    // std::cout << "Image data\n\n\n" << data << "\n";
-
-    std::ofstream outStream("outServer.png");
-    outStream << req.body;
-    outStream.close();
-
-    crow::json::wvalue x;
-    x["data"] = "hi";
-    return crow::response(x);
-  });
+        // Format points for transport - json
+        std::vector<crow::json::wvalue> pointList;
+        for (auto& point : points) {
+          crow::json::wvalue newPoint;
+          newPoint["x"] = point["x"];
+          newPoint["y"] = point["y"];
+          pointList.push_back(std::move(newPoint));
+        }
+        // Format JSON response
+        crow::json::wvalue response;
+        response["points"] = std::move(pointList);
+        return crow::response(response);
+      });
 }

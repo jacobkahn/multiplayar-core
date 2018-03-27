@@ -12,6 +12,9 @@ namespace bg = boost::geometry;
 // A coordinate representation as a Cartesian Boost geometry point
 using Location = bg::model::point<double, kPointDimension, bg::cs::cartesian>;
 
+// Entity string
+using EntityID = std::string;
+
 /**
  * A generic entity is something that exists in the environment. This could be a
  * user, an object, or something else. It has an ID and a location at a given
@@ -22,15 +25,13 @@ class Entity {
   /**
    * Requires a starting location on construction
    */
-  Entity(Location startLocation);
+  Entity(EntityID id);
 
   /**
    * Returns the UUID for this entity
    */
-  boost::uuids::uuid getUUID() const;
+  EntityID getID() const;
 
  private:
-  boost::uuids::uuid uuid;
-  // The entity's current location
-  Location location_{0.0, 0.0, 0.0};
+  EntityID id_;
 };

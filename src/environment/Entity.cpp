@@ -4,11 +4,9 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
-Entity::Entity(Location startLocation) : location_(startLocation) {
-  // Generate uuid
-  uuid = boost::uuids::random_generator()();
+Entity::Entity(EntityID id) : id_(id) {
 }
 
-boost::uuids::uuid Entity::getUUID() const {
-  return uuid;
+EntityID Entity::getID() const {
+  return id_;
 }

@@ -1,3 +1,3 @@
 #include "include/environment/Object.hpp"
 
-Object::Object(Location startLocation) : Entity(std::move(startLocation)) {}
+Object::Object(EntityID id) : Entity(std::move(id)) {}

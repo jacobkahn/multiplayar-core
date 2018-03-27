@@ -1,34 +1,49 @@
 #include "include/environment/Environment.hpp"
 #include <boost/functional/hash.hpp>
-#include <boost/uuid/uuid.hpp>
 #include <memory>
 #include <utility>
 #include <vector>
 #include "include/environment/Client.hpp"
 #include "include/environment/Object.hpp"
 
-boost::uuids::uuid Environment::addClient(Location loc) {
-  auto client = std::make_shared<Client>(loc);
-  auto uid = client->getUUID();
+PointList Environment::updateClient(EntityID id, const std::string& image) {
+  std::shared_ptr<Client> client;
+  if (clientExists(id)) {
+    client = clientsByID.find(id)->second;
+    client->processImage(image);
 
-  clients.push_back(client);
+  } else {
+    client = std::make_shared<Client>(id);
 
-  boost::hash<boost::uuids::uuid> uuid_hasher;
-  clients_by_id.insert(std::pair<std::size_t, std::shared_ptr<Client>>(
-      uuid_hasher(uid), client));
+    clients.push_back(client);
+    clientsByID.insert(std::make_pair(id, client));
+  }
 
-  return uid;
+  // Attempt to compute homography with another client
+  // Make sure we're not the only client
+  if (clients.size() > 1) {
+    // Get not you
+    for (auto& otherClient : clients) {
+      if (otherClient->getID() != client->getID()) {
+        // We found another client that isn't us. Compute homography
+        auto siftClient = std::make_unique<SIFTClient>();
+        auto result = siftClient->computeHomographyTransformationFromClients(
+            client, otherClient);
+        // We only care about the first point list - that's the calling user's
+        return result.first;
+      }
+    }
+  }
+  return {};
 }
 
-boost::uuids::uuid Environment::addObject(Location loc) {
-  auto object = std::make_shared<Object>(loc);
-  auto uid = object->getUUID();
+bool Environment::clientExists(const EntityID& id) {
+  return clientsByID.find(id) != clientsByID.end();
+}
+
+void Environment::addObject(EntityID id) {
+  auto object = std::make_shared<Object>(id);
 
   objects.push_back(object);
-
-  boost::hash<boost::uuids::uuid> uuid_hasher;
-  objects_by_id.insert(std::pair<std::size_t, std::shared_ptr<Object>>(
-      uuid_hasher(uid), object));
-
-  return uid;
+  objectsByID.insert(std::make_pair(id, object));
 }
