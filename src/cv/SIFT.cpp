@@ -2,7 +2,6 @@
 #include <opencv2/core/cvstd.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/xfeatures2d.hpp>
-#include "include/environment/Client.hpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -12,13 +11,16 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include "include/environment/Client.hpp"
 
 // Distance for KD matching
 const double kMinDistanceKDMatching = 20;
 // Percentile of total matches that we are taking as "good" matches
 const double kDistancePercentKDMatch = 0.005;
 // Minimum number of points we need for a homography threshold
-const size_t kMinPointsHomographyThreshold = 8;
+const size_t kMinPointsHomographyThreshold = 6;
+// Minimum number of points we need for a homography threshold
+const size_t kMaxPointsHomographyHeap = 50;
 // Constant for Lowe's ratio test across the best matches
 const double kRatioTestConstant = 0.6;
 
@@ -89,18 +91,15 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
 
   for (int k = 0; k < std::min(queryDescriptors.rows - 1, (int)matches.size());
        k++) {
+    // Ratio test from the Lowe paper. Take the first result if distance is
+    // smaller than a threshold (ignore the other descriptor) if the second
+    // distance is very different
     if ((matches[k][0].distance <
          kRatioTestConstant * (matches[k][1].distance)) &&
         ((int)matches[k].size() <= 2 && (int)matches[k].size() > 0)) {
-      // take the first result only if its distance is smaller than
-      // 0.6*second_best_dist that means this descriptor is ignored if the
-      // second distance is bigger or of similar
       filteredMatches.push_back(matches[k][0]);
     }
   }
-
-  std::cout << "Out of " << matches.size() << " matches, "
-            << filteredMatches.size() << " good matches found.\n";
 
   // Count the number of mathes where the distance is less than 2 * min_dist
   // Lambda comparator between distance fields of DMatches
@@ -110,44 +109,42 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
   std::priority_queue<cv::DMatch, std::vector<cv::DMatch>, decltype(cmp)>
       matchMaxHeap(cmp);
   for (size_t i = 0; i < filteredMatches.size(); i++) {
-    std::cout << "Match distances " << filteredMatches[i].distance << "\n";
+    // std::cout << "Match distances " << filteredMatches[i].distance << "\n";
     // Add to heap
     matchMaxHeap.push(filteredMatches[i]);
     // If we're at capacity, pop the top element
-    if (matchMaxHeap.size() > kMinPointsHomographyThreshold) {
+    if (matchMaxHeap.size() > kMaxPointsHomographyHeap) {
       matchMaxHeap.pop();
     }
   }
   // Remove everything, save to vector
-  std::vector<cv::DMatch> goodMatches;
+  goodMatches_ = std::vector<cv::DMatch>();
   while (matchMaxHeap.size() != 0) {
-    goodMatches.push_back(matchMaxHeap.top());
+    goodMatches_.push_back(matchMaxHeap.top());
     matchMaxHeap.pop();
   }
 
   // Make sure we have enough points?
   // TODO: stuff
-  if (goodMatches.size() == 0 ||
-      goodMatches.size() < kMinPointsHomographyThreshold) {
+  if (goodMatches_.size() == 0 ||
+      goodMatches_.size() < kMinPointsHomographyThreshold) {
     std::cout << "Insufficient matches found for homography. Exiting.\n";
-    // return std::make_pair();
+    return std::make_pair(PointList(), PointList());
   }
 
   // Get keypoints that we care about
   std::vector<cv::Point2f> finalQueryKeypoints;
   std::vector<cv::Point2f> finalTrainKeypoints;
-  for (auto& match : goodMatches) {
+  for (auto& match : goodMatches_) {
     finalQueryKeypoints.push_back(queryKeypoints[match.queryIdx].pt);
     finalTrainKeypoints.push_back(trainKeypoints[match.trainIdx].pt);
   }
   /***** Find Homography *****/
   // TODO: is this the right way to use ransac?
   cv::Mat QThomography =
-      cv::findHomography(finalQueryKeypoints, finalTrainKeypoints, cv::RANSAC);
+      cv::findHomography(finalQueryKeypoints, finalTrainKeypoints);
   cv::Mat TQhomography =
-      cv::findHomography(finalTrainKeypoints, finalQueryKeypoints, cv::RANSAC);
-  std::cout << "Query to train homography is " << QThomography << "\n";
-  std::cout << "Train to query homography is " << TQhomography << "\n";
+      cv::findHomography(finalTrainKeypoints, finalQueryKeypoints);
 
   /***** Perspective transform for query image *****/
   std::vector<cv::Point2f> queryImageCorners(4);
@@ -156,7 +153,7 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
   queryImageCorners[1] = cv::Point2f(queryCols, 0);
   queryImageCorners[2] = cv::Point2f(queryCols, queryRows);
   queryImageCorners[3] = cv::Point2f(0, queryRows);
-  std::vector<cv::Point2f> queryWorldCorners(4);
+
   /***** Perspective transform for train image *****/
   std::vector<cv::Point2f> trainImageCorners(4);
   // Compute dimensions of images
@@ -164,27 +161,29 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
   trainImageCorners[1] = cv::Point2f(trainCols, 0);
   trainImageCorners[2] = cv::Point2f(trainCols, trainRows);
   trainImageCorners[3] = cv::Point2f(0, trainRows);
-  std::vector<cv::Point2f> trainWorldCorners(4);
+
+  queryWorldCorners_ = std::vector<cv::Point2f>(4);
+  trainWorldCorners_ = std::vector<cv::Point2f>(4);
 
   /***** Perform perspective transform *****/
   // Find dimensions of both images so we can apply the homography to the
   // source images to compute 2D markers for anchor offsets Compute
-  // transform
-  cv::perspectiveTransform(trainImageCorners, trainWorldCorners, TQhomography);
-  cv::perspectiveTransform(queryImageCorners, queryWorldCorners, QThomography);
+  // transform. Save world corners for both in the client
+  cv::perspectiveTransform(trainImageCorners, trainWorldCorners_, TQhomography);
+  cv::perspectiveTransform(queryImageCorners, queryWorldCorners_, QThomography);
 
-  std::cout << "Query world corners " << queryWorldCorners << "\n";
-  std::cout << "Train world corners " << trainWorldCorners << "\n";
+  std::cout << "Query world corners " << queryWorldCorners_ << "\n";
+  std::cout << "Train world corners " << trainWorldCorners_ << "\n";
 
-  // Format for response
+  // Format for res
   PointList queryPoints, trainPoints;
-  for (size_t i = 0; i < queryWorldCorners.size(); i++) {
+  for (size_t i = 0; i < queryWorldCorners_.size(); i++) {
     queryPoints.push_back(
-        {{"x", queryWorldCorners[i].x}, {"y", queryWorldCorners[i].y}});
+        {{"x", queryWorldCorners_[i].x}, {"y", queryWorldCorners_[i].y}});
   }
-  for (size_t i = 0; i < trainWorldCorners.size(); i++) {
+  for (size_t i = 0; i < trainWorldCorners_.size(); i++) {
     trainPoints.push_back(
-        {{"x", trainWorldCorners[i].x}, {"y", trainWorldCorners[i].y}});
+        {{"x", trainWorldCorners_[i].x}, {"y", trainWorldCorners_[i].y}});
   }
 
   auto result = std::make_pair(queryPoints, trainPoints);
@@ -194,104 +193,94 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
 }
 
 void SIFTClient::runToySIFT() {
-  // // Open and read raw image strings
-  // std::ifstream queryStream("queryImage.jpg");
-  // std::ifstream trainStream("trainImage.jpg");
-  // queryStream >> std::noskipws;
-  // trainStream >> std::noskipws;
+  // Open and read raw image strings
+  std::ifstream queryStream("queryImage.jpg");
+  std::ifstream trainStream("trainImage.jpg");
+  queryStream >> std::noskipws;
+  trainStream >> std::noskipws;
 
-  // std::string rawQueryString(
-  //     (std::istreambuf_iterator<char>(queryStream)),
-  //     std::istreambuf_iterator<char>());
+  std::string rawQueryString(
+      (std::istreambuf_iterator<char>(queryStream)),
+      std::istreambuf_iterator<char>());
 
-  // std::string rawTrainString(
-  //     (std::istreambuf_iterator<char>(trainStream)),
-  //     std::istreambuf_iterator<char>());
+  std::string rawTrainString(
+      (std::istreambuf_iterator<char>(trainStream)),
+      std::istreambuf_iterator<char>());
 
-  //     // Decode image data
-  // std::vector<char> rawQueryArr(rawQueryData.begin(), rawQueryData.end());
-  // cv::Mat queryImage = cv::imdecode(cv::Mat(rawQueryArr),
-  // cv::IMREAD_UNCHANGED); std::vector<char> rawTrainArr(rawTrainData.begin(),
-  // rawTrainData.end()); cv::Mat trainImage =
-  // cv::imdecode(cv::Mat(rawTrainArr), cv::IMREAD_UNCHANGED);
+  // Decode image data
+  std::vector<char> rawQueryArr(rawQueryString.begin(), rawQueryString.end());
+  cv::Mat queryImage = cv::imdecode(cv::Mat(rawQueryArr), cv::IMREAD_COLOR);
+  std::vector<char> rawTrainArr(rawTrainString.begin(), rawTrainString.end());
+  cv::Mat trainImage = cv::imdecode(cv::Mat(rawTrainArr), cv::IMREAD_COLOR);
 
-  // /***** Extract Keypoints and Descriptors from both images *****/
-  // // Keypoints to be extracted from image
-  // std::vector<cv::KeyPoint> queryKeypoints;
-  // std::vector<cv::KeyPoint> trainKeypoints;
-  // // Descriptors to be extracted from image
-  // cv::Mat queryDescriptors;
-  // cv::Mat trainDescriptors;
+  /***** Extract Keypoints and Descriptors from both images *****/
+  auto queryImageData = detectAndComputeKeypointsAndDescriptors(queryImage);
+  auto trainImageData = detectAndComputeKeypointsAndDescriptors(trainImage);
 
-  // // Feature detector
-  // cv::Ptr<cv::xfeatures2d::SIFT> siftTrainClient =
-  //     cv::xfeatures2d::SIFT::create(
-  //         //   0, // nFeatures
-  //         //   3, // nOctaveLayers
-  //         //   0.04, // contrastThreshold
-  //         //   10, // edgeThreshold
-  //         //   1.6 // sigma
-  //     );
-  // // Make descriptor extractor
-  // cv::Ptr<cv::xfeatures2d::SIFT> siftQueryClient =
-  //     cv::xfeatures2d::SIFT::create(
-  //         //   0, // nFeatures
-  //         //   3, // nOctaveLayers
-  //         //   0.04, // contrastThreshold
-  //         //   10, // edgeThreshold
-  //         //   1.6 // sigma
-  //     );
+  auto queryKeypoints = queryImageData.first;
+  auto trainKeypoints = trainImageData.first;
+  auto queryDescriptors = queryImageData.second;
+  auto trainDescriptors = queryImageData.second;
 
-  // // Extract keypoints and descriptors from image 1
-  // siftTrainClient->detectAndCompute(
-  //     queryImage, cv::noArray(), queryKeypoints, queryDescriptors);
+  /***** Compute Homography and run Perspective Transform *****/
+  auto points = computeHomographyTransformation(
+      queryKeypoints,
+      trainKeypoints,
+      queryDescriptors,
+      trainDescriptors,
+      queryImage.rows,
+      queryImage.cols,
+      trainImage.rows,
+      trainImage.cols);
 
-  // // Extract keypoints and descriptors from image 2
-  // siftTrainClient->detectAndCompute(
-  //     trainImage, cv::noArray(), trainKeypoints, trainDescriptors);
+  /***** Draw the image result *****/
+  // Resize down
+  auto small = std::min(queryKeypoints.size(), trainKeypoints.size());
+  queryKeypoints.resize(goodMatches_.size());
+  trainKeypoints.resize(goodMatches_.size());
 
-  // computeHomographyTransformation(rawQueryString, rawTrainString, true);
+  std::cout << "Good matches are " << goodMatches_.size() << "\n";
+  std::cout << "Keypoints q " << queryKeypoints.size() << "\n";
+  std::cout << "Keypoints t " << trainKeypoints.size() << "\n";
 
-  // // Draw the image if we want to
-  // if (drawImageResult) {
-  //   cv::Mat imageDrawMatches;
-  //   drawMatches(
-  //       queryImage,
-  //       queryKeypoints,
-  //       trainImage,
-  //       trainKeypoints,
-  //       goodMatches,
-  //       imageDrawMatches,
-  //       cv::Scalar::all(-1),
-  //       cv::Scalar::all(-1),
-  //       std::vector<char>(),
-  //       cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+  // Draw
+  cv::Mat imageDrawMatches;
+  cv::drawMatches(
+      queryImage,
+      queryKeypoints,
+      trainImage,
+      trainKeypoints,
+      goodMatches_,
+      imageDrawMatches,
+      cv::Scalar::all(-1),
+      cv::Scalar::all(-1),
+      std::vector<char>(),
+      cv::DrawMatchesFlags::DEFAULT);
 
-  //   cv::line(
-  //       imageDrawMatches,
-  //       trainWorldCorners[0] + cv::Point2f(queryCols, 0),
-  //       trainWorldCorners[1] + cv::Point2f(queryCols, 0),
-  //       cv::Scalar(0, 255, 0),
-  //       4);
-  //   cv::line(
-  //       imageDrawMatches,
-  //       trainWorldCorners[1] + cv::Point2f(queryCols, 0),
-  //       trainWorldCorners[2] + cv::Point2f(queryCols, 0),
-  //       cv::Scalar(0, 255, 0),
-  //       4);
-  //   cv::line(
-  //       imageDrawMatches,
-  //       trainWorldCorners[2] + cv::Point2f(queryCols, 0),
-  //       trainWorldCorners[3] + cv::Point2f(queryCols, 0),
-  //       cv::Scalar(0, 255, 0),
-  //       4);
-  //   cv::line(
-  //       imageDrawMatches,
-  //       trainWorldCorners[3] + cv::Point2f(queryCols, 0),
-  //       trainWorldCorners[0] + cv::Point2f(queryCols, 0),
-  //       cv::Scalar(0, 255, 0),
-  //       4);
+  cv::line(
+      imageDrawMatches,
+      trainWorldCorners_[0] + cv::Point2f(queryImage.cols, 0),
+      trainWorldCorners_[1] + cv::Point2f(queryImage.cols, 0),
+      cv::Scalar(0, 255, 0),
+      4);
+  cv::line(
+      imageDrawMatches,
+      trainWorldCorners_[1] + cv::Point2f(queryImage.cols, 0),
+      trainWorldCorners_[2] + cv::Point2f(queryImage.cols, 0),
+      cv::Scalar(0, 255, 0),
+      4);
+  cv::line(
+      imageDrawMatches,
+      trainWorldCorners_[2] + cv::Point2f(queryImage.cols, 0),
+      trainWorldCorners_[3] + cv::Point2f(queryImage.cols, 0),
+      cv::Scalar(0, 255, 0),
+      4);
+  cv::line(
+      imageDrawMatches,
+      trainWorldCorners_[3] + cv::Point2f(queryImage.cols, 0),
+      trainWorldCorners_[0] + cv::Point2f(queryImage.cols, 0),
+      cv::Scalar(0, 255, 0),
+      4);
 
-  //   cv::imwrite("out.png", imageDrawMatches);
-  // }
+  cv::imwrite("out.png", imageDrawMatches);
 }

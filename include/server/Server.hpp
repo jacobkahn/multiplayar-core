@@ -24,5 +24,5 @@ class Server {
   // App client for
   crow::SimpleApp app;
   // The environment for this server instance
-  std::unique_ptr<Environment> environment_;
+  Environment environment_;
 };

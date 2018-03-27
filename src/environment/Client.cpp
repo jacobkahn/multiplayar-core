@@ -6,7 +6,7 @@
 
 Client::Client(EntityID id) : Entity(std::move(id)) {}
 
-void Client::processImage(const std::string& rawImage) {
+void Client::processImage(std::string rawImage) {
   // Create a matrix out of
   std::vector<char> rawArr(rawImage.begin(), rawImage.end());
   cv::Mat image = cv::imdecode(cv::Mat(rawArr), cv::IMREAD_UNCHANGED);

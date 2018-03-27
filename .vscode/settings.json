@@ -41,6 +41,8 @@
         "__string": "cpp",
         "__functional_base": "cpp",
         "future": "cpp",
-        "istream": "cpp"
+        "istream": "cpp",
+        "atomic": "cpp",
+        "system_error": "cpp"
     }
 }

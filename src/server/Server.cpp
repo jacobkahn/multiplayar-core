@@ -42,7 +42,7 @@ void Server::setup() {
             req.headers.find("x-user-id")->second; // TODO: get the id
         std::string image = req.body; // TODO: get the image
         // Add a user to the environment or update an existing user
-        auto points = environment_->updateClient(id, image);
+        auto points = environment_.updateClient(id, std::move(image));
 
         // Format points for transport - json
         std::vector<crow::json::wvalue> pointList;

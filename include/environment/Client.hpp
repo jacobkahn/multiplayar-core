@@ -16,7 +16,7 @@ class Client : public Entity {
  public:
   Client(EntityID id);
 
-  void processImage(const std::string& image);
+  void processImage(std::string image);
 
   std::vector<cv::KeyPoint> getKeypoints() {
     return keypoints_;

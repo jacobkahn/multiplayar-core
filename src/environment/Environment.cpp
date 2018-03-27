@@ -6,15 +6,15 @@
 #include "include/environment/Client.hpp"
 #include "include/environment/Object.hpp"
 
-PointList Environment::updateClient(EntityID id, const std::string& image) {
+PointList Environment::updateClient(EntityID id, std::string image) {
   std::shared_ptr<Client> client;
   if (clientExists(id)) {
     client = clientsByID.find(id)->second;
-    client->processImage(image);
+    client->processImage(std::move(image));
 
   } else {
     client = std::make_shared<Client>(id);
-
+    client->processImage(std::move(image));
     clients.push_back(client);
     clientsByID.insert(std::make_pair(id, client));
   }

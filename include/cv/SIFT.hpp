@@ -22,6 +22,20 @@ class SIFTClient {
    */
   void runToySIFT();
 
+  std::pair<std::vector<cv::KeyPoint>, cv::Mat>
+  detectAndComputeKeypointsAndDescriptors(const cv::Mat& image);
+
+  std::pair<PointList, PointList> computeHomographyTransformationFromClients(
+      std::shared_ptr<Client> client1,
+      std::shared_ptr<Client> client2);
+
+ private:
+  //  Good keypoint matches and world corners for the query and train images for
+  //  this client
+  std::vector<cv::DMatch> goodMatches_;
+  std::vector<cv::Point2f> trainWorldCorners_;
+  std::vector<cv::Point2f> queryWorldCorners_;
+
   /**
    * Given two pieces of raw image data, run SIFT, find a homography, and
    * perform a perspective transform. Return the ordered point data in the order
@@ -41,11 +55,4 @@ class SIFTClient {
       // The dimensions of the train image
       int trainRows,
       int trainCols);
-
-  std::pair<std::vector<cv::KeyPoint>, cv::Mat>
-  detectAndComputeKeypointsAndDescriptors(const cv::Mat& image);
-
-  std::pair<PointList, PointList> computeHomographyTransformationFromClients(
-      std::shared_ptr<Client> client1,
-      std::shared_ptr<Client> client2);
 };

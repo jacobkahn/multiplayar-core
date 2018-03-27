@@ -10,12 +10,10 @@
 
 class Environment {
  public:
-  Environment();
-
   /**
    * Add a client to an environment
    */
-  PointList updateClient(EntityID id, const std::string& image);
+  PointList updateClient(EntityID id, std::string image);
 
   bool clientExists(const EntityID& id);
 
