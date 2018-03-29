@@ -30,12 +30,6 @@ class SIFTClient {
       std::shared_ptr<Client> client2);
 
  private:
-  //  Good keypoint matches and world corners for the query and train images for
-  //  this client
-  std::vector<cv::DMatch> goodMatches_;
-  std::vector<cv::Point2f> trainWorldCorners_;
-  std::vector<cv::Point2f> queryWorldCorners_;
-
   /**
    * Given two pieces of raw image data, run SIFT, find a homography, and
    * perform a perspective transform. Return the ordered point data in the order
