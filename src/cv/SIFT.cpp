@@ -20,9 +20,9 @@ const double kDistancePercentKDMatch = 0.005;
 // Minimum number of points we need for a homography threshold
 const size_t kMinPointsHomographyThreshold = 6;
 // Minimum number of points we need for a homography threshold
-const size_t kMaxPointsHomographyHeap = 50;
+const size_t kMaxPointsHomographyHeap = 75;
 // Constant for Lowe's ratio test across the best matches
-const double kRatioTestConstant = 0.6;
+const double kRatioTestConstant = 2;
 
 std::pair<std::vector<cv::KeyPoint>, cv::Mat>
 SIFTClient::detectAndComputeKeypointsAndDescriptors(const cv::Mat& image) {
@@ -85,10 +85,11 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
   // Matches we find from the compare
   std::vector<std::vector<cv::DMatch>> matches;
   matcher.knnMatch(queryDescriptors, trainDescriptors, matches, 2);
-  // We use Lowe's Euclidean ratio test to measure the match distance to assess
-  // how good them matches are y'all
-  std::vector<cv::DMatch> filteredMatches;
 
+  /***** Lowe Ratio test *****/
+  // We use Lowe's Euclidean ratio test (Frobenius) to measure the match
+  // distance to assess how good them matches are y'all
+  std::vector<cv::DMatch> filteredMatches;
   for (int k = 0; k < std::min(queryDescriptors.rows - 1, (int)matches.size());
        k++) {
     // Ratio test from the Lowe paper. Take the first result if distance is
@@ -139,6 +140,7 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
     finalQueryKeypoints.push_back(queryKeypoints[match.queryIdx].pt);
     finalTrainKeypoints.push_back(trainKeypoints[match.trainIdx].pt);
   }
+
   /***** Find Homography *****/
   // TODO: is this the right way to use ransac?
   cv::Mat QThomography =
@@ -194,8 +196,7 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
 
 void SIFTClient::runToySIFT() {
   // Read in an image from an interesting
-  const cv::Mat queryImage =
-      cv::imread("queryImage.jpg");
+  const cv::Mat queryImage = cv::imread("queryImage.jpg");
   // Read in
   const cv::Mat trainImage = cv::imread("trainImage.jpg");
 
@@ -208,24 +209,28 @@ void SIFTClient::runToySIFT() {
   cv::Mat trainDescriptors;
 
   // New SIFT
-  cv::Ptr<cv::xfeatures2d::SIFT> siftClientQuery = cv::xfeatures2d::SIFT::create(
-      //   0, // nFeatures
-      //   3, // nOctaveLayers
-      //   0.04, // contrastThreshold
-      //   10, // edgeThreshold
-      //   1.6 // sigma
-  );
-  siftClientQuery->detectAndCompute(queryImage, cv::noArray(), queryKeypoints, queryDescriptors);
+  cv::Ptr<cv::xfeatures2d::SIFT> siftClientQuery =
+      cv::xfeatures2d::SIFT::create(
+          //   0, // nFeatures
+          //   3, // nOctaveLayers
+          //   0.04, // contrastThreshold
+          //   10, // edgeThreshold
+          //   1.6 // sigma
+      );
+  siftClientQuery->detectAndCompute(
+      queryImage, cv::noArray(), queryKeypoints, queryDescriptors);
 
   // New SIFT
-  cv::Ptr<cv::xfeatures2d::SIFT> siftClientTrain = cv::xfeatures2d::SIFT::create(
-      //   0, // nFeatures
-      //   3, // nOctaveLayers
-      //   0.04, // contrastThreshold
-      //   10, // edgeThreshold
-      //   1.6 // sigma
-  );
-  siftClientTrain->detectAndCompute(trainImage, cv::noArray(), trainKeypoints, trainDescriptors);
+  cv::Ptr<cv::xfeatures2d::SIFT> siftClientTrain =
+      cv::xfeatures2d::SIFT::create(
+          //   0, // nFeatures
+          //   3, // nOctaveLayers
+          //   0.04, // contrastThreshold
+          //   10, // edgeThreshold
+          //   1.6 // sigma
+      );
+  siftClientTrain->detectAndCompute(
+      trainImage, cv::noArray(), trainKeypoints, trainDescriptors);
 
   // KD Tree parameters
   const cv::Ptr<cv::flann::IndexParams>& indexParams =

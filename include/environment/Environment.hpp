@@ -13,7 +13,10 @@ class Environment {
   /**
    * Add a client to an environment
    */
-  PointList updateClient(EntityID id, std::string image);
+  PointList updateClient(
+      EntityID id,
+      std::string image,
+      std::vector<cv::Point2f> candidatePoints);
 
   bool clientExists(const EntityID& id);
 

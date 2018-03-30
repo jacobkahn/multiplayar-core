@@ -2,6 +2,7 @@
 #include <opencv2/core/cvstd.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/xfeatures2d.hpp>
+#include <vector>
 #include "include/cv/SIFT.hpp"
 
 Client::Client(EntityID id) : Entity(std::move(id)) {}

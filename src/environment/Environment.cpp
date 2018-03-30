@@ -6,12 +6,14 @@
 #include "include/environment/Client.hpp"
 #include "include/environment/Object.hpp"
 
-PointList Environment::updateClient(EntityID id, std::string image) {
+PointList Environment::updateClient(
+    EntityID id,
+    std::string image,
+    std::vector<cv::Point2f> candidatePoints) {
   std::shared_ptr<Client> client;
   if (clientExists(id)) {
     client = clientsByID.find(id)->second;
     client->processImage(std::move(image));
-
   } else {
     client = std::make_shared<Client>(id);
     client->processImage(std::move(image));
@@ -29,8 +31,36 @@ PointList Environment::updateClient(EntityID id, std::string image) {
         auto siftClient = std::make_unique<SIFTClient>();
         auto result = siftClient->computeHomographyTransformationFromClients(
             client, otherClient);
+        /***** Choose the closest candidate points to our output points *****/
+        // New collection of AR-kit candidate points
+        PointList bestCandidatePoints;
+        // We perform a brute force algorithm over which the runtime is 4
+        // times the total number of ARKit-detected points. This is a minor
+        // compuation: we're simply computing an L2 metric over the point
+        // set
+        std::cout << "Matched candidate points:\n";
+        for (auto& point : result.first) {
+          // Look through candidate points, track the lowest current point
+          double minDistance = 0.0;
+          cv::Point2f bestPoint;
+          for (auto& candidatePoint : candidatePoints) {
+            auto bestDistance = cv::norm(
+                cv::Mat(cv::Point2f(point["x"], point["y"])),
+                cv::Mat(candidatePoint));
+            // Check if this is the best candidate point
+            if (minDistance < bestDistance) {
+              minDistance = bestDistance;
+              bestPoint = candidatePoint;
+            }
+          }
+          // Add best candidate point to set
+          bestCandidatePoints.push_back(
+              {{"x", bestPoint.x}, {"y", bestPoint.y}});
+          std::cout << "p: (" << bestPoint.x << ", " << bestPoint.y << ")\n";
+        }
+        // result.first;
         // We only care about the first point list - that's the calling user's
-        return result.first;
+        return bestCandidatePoints;
       }
     }
   }
