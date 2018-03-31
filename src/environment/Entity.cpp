@@ -10,3 +10,11 @@ Entity::Entity(EntityID id) : id_(id) {
 EntityID Entity::getID() const {
   return id_;
 }
+
+Location Entity::getLocation() const {
+  return location_;
+}
+
+void Entity::updateLocation(Location location) {
+  location_ = location;
+}

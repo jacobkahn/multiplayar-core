@@ -12,7 +12,7 @@
 class Client;
 
 // Point data for a given perspective transform derived from a homography
-using PointList = std::vector<std::unordered_map<std::string, double>>;
+using PointList = std::vector<std::unordered_map<std::string, std::string>>;
 
 class SIFTClient {
  public:

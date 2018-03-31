@@ -1,16 +1,10 @@
 #pragma once
 
-#include <boost/geometry.hpp>
 #include <boost/uuid/uuid.hpp>
-
-// Generalize to n-dimensional space for a point
-const size_t kPointDimension = 3;
-
-// Boost geometry
-namespace bg = boost::geometry;
+#include <opencv2/opencv.hpp>
 
 // A coordinate representation as a Cartesian Boost geometry point
-using Location = bg::model::point<double, kPointDimension, bg::cs::cartesian>;
+using Location = cv::Point3d;
 
 // Entity string
 using EntityID = std::string;
@@ -32,6 +26,17 @@ class Entity {
    */
   EntityID getID() const;
 
+  /**
+   * Returns the location for this entity
+   */
+  Location getLocation() const;
+
+  /**
+   * Updates the location for this entity
+   */
+  void updateLocation(Location location);
+
  private:
   EntityID id_;
+  Location location_;
 };

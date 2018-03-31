@@ -1,6 +1,7 @@
 #include "include/environment/Environment.hpp"
 #include <boost/functional/hash.hpp>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 #include "include/environment/Client.hpp"
@@ -45,7 +46,8 @@ PointList Environment::updateClient(
           cv::Point2f bestPoint;
           for (auto& candidatePoint : candidatePoints) {
             auto bestDistance = cv::norm(
-                cv::Mat(cv::Point2f(point["x"], point["y"])),
+                cv::Mat(
+                    cv::Point2f(std::stod(point["x"]), std::stod(point["y"]))),
                 cv::Mat(candidatePoint));
             // Check if this is the best candidate point
             if (minDistance < bestDistance) {
@@ -54,8 +56,8 @@ PointList Environment::updateClient(
             }
           }
           // Add best candidate point to set
-          bestCandidatePoints.push_back(
-              {{"x", bestPoint.x}, {"y", bestPoint.y}});
+          bestCandidatePoints.push_back({{"x", std::to_string(bestPoint.x)},
+                                         {"y", std::to_string(bestPoint.y)}});
           std::cout << "p: (" << bestPoint.x << ", " << bestPoint.y << ")\n";
         }
         // result.first;
@@ -71,9 +73,33 @@ bool Environment::clientExists(const EntityID& id) {
   return clientsByID.find(id) != clientsByID.end();
 }
 
-void Environment::addObject(EntityID id) {
-  auto object = std::make_shared<Object>(id);
-
+EntityID Environment::addObject() {
+  // TODO: make this and all entities into actual UUID generation
+  // Create new object with the next ID
+  auto object = std::make_shared<Object>(std::to_string(objects.size() + 1));
+  // Add to collections
   objects.push_back(object);
-  objectsByID.insert(std::make_pair(id, object));
+  objectsByID.insert(std::make_pair(object->getID(), object));
+  return object->getID();
+}
+
+void Environment::updateObject(EntityID id, Location location) {
+  auto iter = objectsByID.find(id);
+  if (iter != objectsByID.end()) {
+    iter->second->updateLocation(location);
+  } else {
+    // Invalid object ID: simply return and do nothing
+  }
+}
+
+ObjectData Environment::getObjectRepresentation() {
+  ObjectData data;
+  for (auto& object : objects) {
+    auto location = object->getLocation();
+    data.push_back({{"id", object->getID()},
+                    {"x", std::to_string(location.x)},
+                    {"y", std::to_string(location.y)},
+                    {"z", std::to_string(location.z)}});
+  }
+  return data;
 }

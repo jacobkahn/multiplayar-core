@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -7,6 +8,9 @@
 #include "include/environment/Client.hpp"
 #include "include/environment/Entity.hpp"
 #include "include/environment/Object.hpp"
+
+// Object data
+using ObjectData = std::vector<std::unordered_map<std::string, std::string>>;
 
 class Environment {
  public:
@@ -23,7 +27,27 @@ class Environment {
   /**
    * Add an object to the environment
    */
-  void addObject(EntityID id);
+  EntityID addObject();
+
+  /**
+   * Updates an object's location in the environment
+   */
+  void updateObject(EntityID id, Location location);
+
+  /**
+   * Returns an object representation of
+   *
+   * Format is:
+   * [
+   *    {
+   *      id: [id],
+   *      x: [double],
+   *      y: [double],
+   *      z: [double]
+   *    }
+   * ]
+   */
+  ObjectData getObjectRepresentation();
 
  private:
   //  Collection of clients in this environment

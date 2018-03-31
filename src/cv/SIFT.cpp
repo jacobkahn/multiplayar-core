@@ -13,10 +13,6 @@
 #include <vector>
 #include "include/environment/Client.hpp"
 
-// Distance for KD matching
-const double kMinDistanceKDMatching = 20;
-// Percentile of total matches that we are taking as "good" matches
-const double kDistancePercentKDMatch = 0.005;
 // Minimum number of points we need for a homography threshold
 const size_t kMinPointsHomographyThreshold = 6;
 // Minimum number of points we need for a homography threshold
@@ -180,12 +176,12 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
   // Format for res
   PointList queryPoints, trainPoints;
   for (size_t i = 0; i < queryWorldCorners.size(); i++) {
-    queryPoints.push_back(
-        {{"x", queryWorldCorners[i].x}, {"y", queryWorldCorners[i].y}});
+    queryPoints.push_back({{"x", std::to_string(queryWorldCorners[i].x)},
+                           {"y", std::to_string(queryWorldCorners[i].y)}});
   }
   for (size_t i = 0; i < trainWorldCorners.size(); i++) {
-    trainPoints.push_back(
-        {{"x", trainWorldCorners[i].x}, {"y", trainWorldCorners[i].y}});
+    trainPoints.push_back({{"x", std::to_string(trainWorldCorners[i].x)},
+                           {"y", std::to_string(trainWorldCorners[i].y)}});
   }
 
   auto result = std::make_pair(queryPoints, trainPoints);
