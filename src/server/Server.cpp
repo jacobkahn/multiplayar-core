@@ -117,10 +117,17 @@ void Server::setup() {
         std::string rawLocation =
             req.headers.find(kObjectUpdateLocationValue)->second;
         // Parse location into coordinates
-        // TODO: this
-        Location objectLocation;
-        // See if we're working with an existing object ID. If so, go forth and
-        // update it: otherwise, create a new object. Always respond with the ID
+        std::vector<std::string> coordStrings;
+        boost::split(coordStrings, rawLocation, boost::is_any_of(","));
+        std::cout << "New object with coords " << coordStrings[0] << ", "
+                  << coordStrings[1] << ", " << coordStrings[2] << "\n";
+        Location objectLocation = cv::Point3d(
+            std::stof(coordStrings[0]),
+            std::stof(coordStrings[1]),
+            std::stof(coordStrings[2]));
+        // See if we're working with an existing object ID. If so, go forth
+        // and update it: otherwise, create a new object. Always respond
+        // with the ID
         std::string objectID;
         auto objectIDHeader = req.headers.find(kObjectUpdateIDHeader);
         if (objectIDHeader != req.headers.end()) {

@@ -43,6 +43,7 @@
         "future": "cpp",
         "istream": "cpp",
         "atomic": "cpp",
-        "system_error": "cpp"
+        "system_error": "cpp",
+        "type_traits": "cpp"
     }
 }
