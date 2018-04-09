@@ -13,6 +13,19 @@
 #include <vector>
 #include "include/environment/Client.hpp"
 
+StringyPoint PointRepresentationUtils::cvPoint2fToStringyPoint(
+    cv::Point2f point) {
+  return {{kStringyPointXFieldName, std::to_string(point.x)},
+          {kStringyPointYFieldName, std::to_string(point.y)}};
+}
+
+cv::Point2f PointRepresentationUtils::stringyPointToPoint2f(
+    StringyPoint stringyPointMap) {
+  return cv::Point2f(
+      std::stol(stringyPointMap[kStringyPointXFieldName]),
+      std::stol(stringyPointMap[kStringyPointYFieldName]));
+}
+
 // Minimum number of points we need for a homography threshold
 const size_t kMinPointsHomographyThreshold = 6;
 // Minimum number of points we need for a homography threshold
@@ -36,11 +49,12 @@ SIFTClient::detectAndComputeKeypointsAndDescriptors(const cv::Mat& image) {
   return std::make_pair(keypoints, descriptors);
 }
 
-std::pair<PointList, PointList>
+std::shared_ptr<HomographyTransformResult>
 SIFTClient::computeHomographyTransformationFromClients(
     std::shared_ptr<Client> client1,
     std::shared_ptr<Client> client2) {
-  return computeHomographyTransformation(
+  // Compute the homography with raw datas and return candidate points
+  auto transformData = computeHomographyTransformation(
       client1->getKeypoints(),
       client2->getKeypoints(),
       client1->getDescriptors(),
@@ -49,13 +63,28 @@ SIFTClient::computeHomographyTransformationFromClients(
       client1->getCols(),
       client2->getRows(),
       client2->getCols());
+  // Make a new result
+  auto result = std::make_shared<HomographyTransformResult>();
+  // The first two fields in the result are point data for client 1 and client
+  // 2, respectively
+  result->pointMap.emplace(
+      client1->getID(), std::move(transformData.first.first));
+  result->pointMap.emplace(
+      client2->getID(), std::move(transformData.first.second));
+  // The first two fields in the result are point data for client 1 and client
+  // 2, respectively
+  result->homographyMap.emplace(
+      client1->getID(), std::move(transformData.second.first));
+  result->homographyMap.emplace(
+      client2->getID(), std::move(transformData.second.second));
+  return result;
 }
 
 /**
  * Given an image
  * Returns a tuple of images after a perspectice transform
  */
-std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
+RawHomographyData SIFTClient::computeHomographyTransformation(
     // Keypoints to be extracted from image
     std::vector<cv::KeyPoint> queryKeypoints,
     std::vector<cv::KeyPoint> trainKeypoints,
@@ -126,7 +155,8 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
   if (goodMatches.size() == 0 ||
       goodMatches.size() < kMinPointsHomographyThreshold) {
     std::cout << "Insufficient matches found for homography. Exiting.\n";
-    return std::make_pair(PointList(), PointList());
+    RawHomographyData emptyData;
+    return emptyData;
   }
 
   // Get keypoints that we care about
@@ -176,18 +206,17 @@ std::pair<PointList, PointList> SIFTClient::computeHomographyTransformation(
   // Format for res
   PointList queryPoints, trainPoints;
   for (size_t i = 0; i < queryWorldCorners.size(); i++) {
-    queryPoints.push_back({{"x", std::to_string(queryWorldCorners[i].x)},
-                           {"y", std::to_string(queryWorldCorners[i].y)}});
+    queryPoints.push_back(PointRepresentationUtils::cvPoint2fToStringyPoint(
+        queryWorldCorners[i]));
   }
   for (size_t i = 0; i < trainWorldCorners.size(); i++) {
-    trainPoints.push_back({{"x", std::to_string(trainWorldCorners[i].x)},
-                           {"y", std::to_string(trainWorldCorners[i].y)}});
+    trainPoints.push_back(PointRepresentationUtils::cvPoint2fToStringyPoint(
+        trainWorldCorners[i]));
   }
-
-  auto result = std::make_pair(queryPoints, trainPoints);
-
-  // Return a tuple of points
-  return result;
+  // Return special data structure
+  return std::make_pair(
+      std::make_pair(queryPoints, trainPoints),
+      std::make_pair(QThomography, TQhomography));
 }
 
 void SIFTClient::runToySIFT() {

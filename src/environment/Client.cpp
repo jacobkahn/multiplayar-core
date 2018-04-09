@@ -20,3 +20,51 @@ void Client::processImage(std::string rawImage) {
   rows_ = image.rows;
   cols_ = image.cols;
 }
+
+std::vector<cv::KeyPoint> Client::getKeypoints() {
+  return keypoints_;
+}
+
+cv::Mat Client::getDescriptors() const {
+  return descriptors_;
+}
+
+int Client::getRows() const {
+  return rows_;
+}
+
+int Client::getCols() const {
+  return cols_;
+}
+
+AnchorPoint2D Client::get2DAnchorPoint() const {
+  return anchor2D_;
+}
+
+void Client::update2DAnchorPoints(AnchorPoint2D point) {
+  if (!initializedAnchor_) {
+    // TODO: log
+    std::cout << "Updating anchor point for client with ID " << getID()
+              << ". Anchor point is " << point << "\n";
+    anchor2D_ = std::move(point);
+    initializedAnchor_ = true;
+  } else {
+    // TODO: log
+    std::cout << "Attempted to update anchor point for client which"
+              << " already had anchor point\n";
+  }
+}
+
+bool Client::hasInitializedAnchor() const {
+  return initializedAnchor_;
+}
+
+void Client::addHomographyTransformResult(
+    EntityID id,
+    std::shared_ptr<HomographyTransformResult> homographyData) {
+  otherClientHomographies_.emplace(std::make_pair(id, homographyData));
+}
+
+const HomographyMap& Client::getHomographyMap() const {
+  return otherClientHomographies_;
+}

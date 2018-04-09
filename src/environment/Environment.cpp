@@ -1,5 +1,6 @@
 #include "include/environment/Environment.hpp"
 #include <boost/functional/hash.hpp>
+#include <opencv2/opencv.hpp>
 #include <memory>
 #include <string>
 #include <utility>
@@ -32,6 +33,10 @@ PointList Environment::updateClient(
         auto siftClient = std::make_unique<SIFTClient>();
         auto result = siftClient->computeHomographyTransformationFromClients(
             client, otherClient);
+        // Store the result of the homography with the other user inside the
+        // mapping for this user so we can retrieve it for anchor calibration
+        // later
+        client->addHomographyTransformResult(otherClient->getID(), result);
         /***** Choose the closest candidate points to our output points *****/
         // New collection of AR-kit candidate points
         PointList bestCandidatePoints;
@@ -40,14 +45,13 @@ PointList Environment::updateClient(
         // compuation: we're simply computing an L2 metric over the point
         // set
         std::cout << "Matched candidate points:\n";
-        for (auto& point : result.first) {
+        for (auto& point : result->pointMap[id]) {
           // Look through candidate points, track the lowest current point
           double minDistance = 0.0;
           cv::Point2f bestPoint;
           for (auto& candidatePoint : candidatePoints) {
             auto bestDistance = cv::norm(
-                cv::Mat(
-                    cv::Point2f(std::stod(point["x"]), std::stod(point["y"]))),
+                cv::Mat(PointRepresentationUtils::stringyPointToPoint2f(point)),
                 cv::Mat(candidatePoint));
             // Check if this is the best candidate point
             if (minDistance < bestDistance) {
@@ -55,12 +59,17 @@ PointList Environment::updateClient(
               bestPoint = candidatePoint;
             }
           }
+          // Add the matched point to the matched point under the aggregate
+          // homography data
+          result->siftToARPointMapping.emplace(
+              bestPoint,
+              PointRepresentationUtils::stringyPointToPoint2f(point));
           // Add best candidate point to set
-          bestCandidatePoints.push_back({{"x", std::to_string(bestPoint.x)},
-                                         {"y", std::to_string(bestPoint.y)}});
+          bestCandidatePoints.push_back(
+              PointRepresentationUtils::cvPoint2fToStringyPoint(bestPoint));
+          // Print point data; TODO: remove
           std::cout << "p: (" << bestPoint.x << ", " << bestPoint.y << ")\n";
         }
-        // result.first;
         // We only care about the first point list - that's the calling user's
         return bestCandidatePoints;
       }
@@ -102,4 +111,48 @@ ObjectData Environment::getObjectRepresentation() {
                     {"z", std::to_string(location.z)}});
   }
   return data;
+}
+
+void Environment::update2DAnchorForClient(EntityID id, cv::Point2f point) {
+  auto client = getClientByID(id);
+  client->update2DAnchorPoints(point);
+
+  // Now, compute updated homographies for each client with which we have a
+  // homography, but only do this for clients that don't have an anchor yet
+  // (because we're deciding their anchor by computing the homography)
+  for (auto& entry : client->getHomographyMap()) {
+    auto homographyData = entry.second;
+    auto otherClient = getClientByID(entry.first);
+    if (!otherClient->hasInitializedAnchor()) {
+      auto homography = homographyData->homographyMap[id];
+      // Look up which SIFT point this AR point was matched to so we can get the
+      // corresponding point from the computed homography
+      auto originalSIFTPoint = homographyData->siftToARPointMapping[point];
+      // Look up the index of the point in the map to get the corresponding one
+      size_t pointIndex = 0;
+      for (auto& siftPoint : homographyData->pointMap[client->getID()]) {
+        if (PointRepresentationUtils::cvPoint2fToStringyPoint(
+                originalSIFTPoint) == siftPoint) {
+          break;
+        }
+        pointIndex++;
+      }
+      // The transformed point for the other client
+      cv::Point2f transformedPoint;
+      // Get the corresponding point in the other client's list. We need to
+      // iterate through all entities and their related point lists (it's simply
+      // this client and the other client)
+      auto iter = homographyData->pointMap.begin();
+      for (; iter != homographyData->pointMap.end(); iter++) {
+        if (iter->first != client->getID()) {
+          // This is the PointList we want, since it's not the client's; it's
+          // the other client's
+          transformedPoint = PointRepresentationUtils::stringyPointToPoint2f(
+              iter->second[pointIndex]);
+        }
+      }
+      // Update the client's anchor with this new homography
+      otherClient->update2DAnchorPoints(transformedPoint);
+    }
+  }
 }

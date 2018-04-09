@@ -1,5 +1,7 @@
 #pragma once
 
+#include <opencv2/core/mat.hpp>
+#include <opencv2/opencv.hpp>
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -23,6 +25,25 @@ class Environment {
       std::vector<cv::Point2f> candidatePoints);
 
   bool clientExists(const EntityID& id);
+
+  std::shared_ptr<Client> getClientByID(EntityID id) {
+    if (!clientExists(id)) {
+      return nullptr;
+    }
+    return clientsByID.at(id);
+  }
+
+  /**
+   * Given a 2D anchor point, update it for the client that it pertains to,
+   * but also use the previous homographies and update the anchor points for any
+   * clients that don't have 2D anchor point yet.
+   *
+   * If a homography exists between the calling client and another client, we
+   * get the nearest SIFT point for which there is an AR point, then use the
+   * transformed point from the original homography to find an anchor point for
+   * the other client.
+   */
+  void update2DAnchorForClient(EntityID id, cv::Point2f point);
 
   /**
    * Add an object to the environment

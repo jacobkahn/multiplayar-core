@@ -8,10 +8,12 @@
 #include "include/cv/SIFT.hpp"
 #include "include/deps/crow.h"
 
-const std::string kUserIDHeaderValue = "x-user-id";
-const std::string kBestCandidateLocations = "x-points";
+const std::string kUserIDHeaderValueHeader = "x-user-id";
+const std::string kBestCandidateLocationsHeader = "x-points";
 const std::string kObjectUpdateIDHeader = "x-object-id";
-const std::string kObjectUpdateLocationValue = "x-object-location";
+const std::string kObjectUpdateLocationValueHeader = "x-object-location";
+const std::string kAnchorPointXHeader = "x-xcord";
+const std::string kAnchorPointYHeader = "x-ycord";
 
 Server::Server() {}
 
@@ -60,10 +62,11 @@ void Server::setup() {
   CROW_ROUTE(app, "/image")
       .methods("POST"_method)([&](const crow::request& req) {
         // Get user id and image from the request
-        std::string id = req.headers.find(kUserIDHeaderValue)->second;
+        std::string id = req.headers.find(kUserIDHeaderValueHeader)->second;
         // Get candidate points that ARKit detects
         std::string rawCandidatePoints;
-        auto candidatePointHeader = req.headers.find(kBestCandidateLocations);
+        auto candidatePointHeader =
+            req.headers.find(kBestCandidateLocationsHeader);
         if (candidatePointHeader != req.headers.end()) {
           rawCandidatePoints = candidatePointHeader->second;
         }
@@ -113,9 +116,12 @@ void Server::setup() {
    */
   CROW_ROUTE(app, "/object")
       .methods("POST"_method)([&](const crow::request& req) {
+        // Get user id from the request
+        std::string id = req.headers.find(kUserIDHeaderValueHeader)->second;
+
         // Get the updated location of the object in question
         std::string rawLocation =
-            req.headers.find(kObjectUpdateLocationValue)->second;
+            req.headers.find(kObjectUpdateLocationValueHeader)->second;
         // Parse location into coordinates
         std::vector<std::string> coordStrings;
         boost::split(coordStrings, rawLocation, boost::is_any_of(","));
@@ -133,11 +139,11 @@ void Server::setup() {
         if (objectIDHeader != req.headers.end()) {
           // Modify existing object
           objectID = objectIDHeader->second;
-          environment_.updateObject(objectID, objectLocation);
         } else {
           // Create a new object with a sequentially-generated ID
           objectID = environment_.addObject();
         }
+        environment_.updateObject(objectID, objectLocation);
         // Format JSON response
         crow::json::wvalue response;
         response["objectID"] = std::move(objectID);
@@ -176,6 +182,70 @@ void Server::setup() {
         // Format JSON response
         crow::json::wvalue response;
         response["objects"] = std::move(objectList);
+        // TODO: send them a user field????
         return crow::response(response);
+      });
+
+  /**
+   * A point that has been selected by the client as an anchor
+   *
+   * @param: entity ID - user id
+   * @param: A 2D world coordinate
+   *
+   * @response: 200 OK
+   */
+  CROW_ROUTE(app, "/anchor")
+      .methods("POST"_method)([&](const crow::request& req) {
+        // Get user id  from the request
+        std::string id = req.headers.find(kUserIDHeaderValueHeader)->second;
+        std::string pointX = req.headers.find(kAnchorPointXHeader)->second;
+        std::string pointY = req.headers.find(kAnchorPointYHeader)->second;
+        auto point = cv::Point2f(std::stol(pointX), std::stol(pointY));
+        // Update anchor points for this client. Stores the point, computes a
+        // homography and applies relevant anchor points to all clients who
+        // don't have anchor points, etc. Any clients who are polling for anchor
+        // points will receive responses once this action completes
+        environment_.update2DAnchorForClient(id, point);
+        // Empty response (endpoing returns nothing on success)
+        return crow::response("");
+      });
+
+  /**
+   * Allows a client to poll to see if they have valid anchor points. If they
+   * were the first client to calibrate or were not a special client who
+   * receives AR points in their response, then they will recieve a point as
+   * soon as another client has calibrated and chosen their anchor point, during
+   * which time the appropriate SIFT point local to the polling point will be
+   * computed with the original homography between the clients (which computed
+   * the first client's SIFT points, and the related best-candidate AR points).
+   *
+   * @param: entity ID - the id of the user
+   * @response: if there is no anchor available for this user, an empty response
+   * is retured. Otherwise, an object containing the 2D anchor point is returned
+   * as follows:
+   * {
+   *   x: [string],
+   *   y: [string]
+   * }
+   */
+  CROW_ROUTE(app, "/pointpoll")
+      .methods("POST"_method)([&](const crow::request& req) {
+        // Check and see if there is a homography and a selected point,
+        // transform and respond with point if true
+        std::string id = req.headers.find(kUserIDHeaderValueHeader)->second;
+        auto client = environment_.getClientByID(id);
+        if (client->hasInitializedAnchor()) {
+          auto stringyPoint = PointRepresentationUtils::cvPoint2fToStringyPoint(
+              client->get2DAnchorPoint());
+          crow::json::wvalue response;
+          response["x"] =
+              stringyPoint[PointRepresentationUtils::kStringyPointXFieldName];
+          response["y"] =
+              stringyPoint[PointRepresentationUtils::kStringyPointYFieldName];
+          return crow::response(response);
+        } else {
+          // If no anchor has been initialized, send back the empty string
+          return crow::response("");
+        }
       });
 }
