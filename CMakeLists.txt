@@ -13,14 +13,12 @@ add_compile_options(-Wall -g)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 add_executable(multiplayar-core ${PROJECT_SOURCE_DIR}/src/main.cpp)
 
-
 # Find Boost
 MESSAGE("Locating dependency: Boost")
 find_package(Boost COMPONENTS system filesystem REQUIRED)
 if(Boost_FOUND)
     MESSAGE("Found dependency: Boost")
     include_directories(${Boost_INCLUDE_DIRS}) 
-    TARGET_LINK_LIBRARIES(multiplayar-core ${Boost_LIBRARIES} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SYSTEM_LIBRARY})
 endif()
 
 
@@ -30,7 +28,6 @@ FIND_PACKAGE(OpenCV REQUIRED)
 if (OpenCV_FOUND)
     MESSAGE("Found dependency: OpenCV")
     include_directories(${OpenCV_INCLUDE_DIRS}) 
-    TARGET_LINK_LIBRARIES(multiplayar-core ${OpenCV_LIBS})
 endif()
 
 # Include directory
@@ -72,4 +69,8 @@ target_link_libraries(
     cv
     -lpthread
     -lm
+    ${OpenCV_LIBS}
+    ${Boost_LIBRARIES}
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_SYSTEM_LIBRARY}
 )

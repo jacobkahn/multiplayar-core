@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
   }
 
   /******* Start Server *******/
-  auto server = std::make_unique<Server>();
+  auto server = std::make_unique<Server>(debugMode);
   server->setup();
   server->run(port);
 }

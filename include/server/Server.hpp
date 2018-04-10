@@ -10,7 +10,7 @@
  */
 class Server {
  public:
-  Server();
+  Server(bool debugMode);
 
   /**
    * Set up routes
@@ -29,6 +29,7 @@ class Server {
       std::unordered_map<std::string, std::string> map);
 
  private:
+  bool debugMode_{false};
   // App client for
   crow::SimpleApp app;
   // The environment for this server instance

@@ -15,7 +15,7 @@ const std::string kXLocationHeader = "x-xcord";
 const std::string kYLocationHeader = "x-ycord";
 const std::string kZLocationHeader = "x-zcord";
 
-Server::Server() {}
+Server::Server(bool debugMode) : debugMode_(debugMode) {}
 
 void Server::run(uint32_t port) {
   // Start main server thread
@@ -32,18 +32,8 @@ crow::json::wvalue Server::mapToCrowWValue(
 }
 
 void Server::setup() {
-  // Test endpoint
-  CROW_ROUTE(app, "/test").methods("POST"_method)([](const crow::request& req) {
-    auto json = crow::json::load(req.body);
-    if (!json) {
-      return crow::response(400);
-    }
-    auto data = json["data"];
-    std::cout << "The user id is " << data << "\n";
-
-    crow::json::wvalue x;
-    x["data"] = data;
-    return crow::response(x);
+  CROW_ROUTE(app, "/").methods("GET"_method)([](const crow::request& req) {
+    return crow::response("Multiplayar Core");
   });
 
   /**
@@ -94,11 +84,6 @@ void Server::setup() {
         auto siftOutPoints =
             environment_.updateClient(id, std::move(image), candidatePoints);
 
-        // TODO: remove me - write the file
-        std::ofstream out("serverOutput" + id + ".png");
-        out << req.body;
-        out.close();
-
         // Format points for transport - json
         std::vector<crow::json::wvalue> pointList;
         for (auto& aSiftPoint : siftOutPoints) {
@@ -126,8 +111,10 @@ void Server::setup() {
         std::string yLoc = req.headers.find(kYLocationHeader)->second;
         std::string zLoc = req.headers.find(kZLocationHeader)->second;
 
-        std::cout << "Object location update at (" << xLoc << ", " << yLoc
-                  << ", " << zLoc << ")\n";
+        if (debugMode_) {
+          std::cout << "Object location update at (" << xLoc << ", " << yLoc
+                    << ", " << zLoc << ")\n";
+        }
 
         Location objectLocation =
             cv::Point3d(std::stof(xLoc), std::stof(yLoc), std::stof(zLoc));
