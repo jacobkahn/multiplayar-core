@@ -2,6 +2,7 @@
 #include <opencv2/core/cvstd.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/xfeatures2d.hpp>
+#include "opencv2/xfeatures2d.hpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -22,8 +23,13 @@ StringyPoint PointRepresentationUtils::cvPoint2fToStringyPoint(
 cv::Point2f PointRepresentationUtils::stringyPointToPoint2f(
     StringyPoint stringyPointMap) {
   return cv::Point2f(
-      std::stol(stringyPointMap[kStringyPointXFieldName]),
-      std::stol(stringyPointMap[kStringyPointYFieldName]));
+      std::stod(stringyPointMap[kStringyPointXFieldName]),
+      std::stod(stringyPointMap[kStringyPointYFieldName]));
+}
+
+std::string PointRepresentationUtils::cvPoint2fToString(cv::Point2f point) {
+  std::string s = "(" + std::to_string(point.x) + ", " + std::to_string(point.y) + ")";
+  return s;
 }
 
 // Minimum number of points we need for a homography threshold

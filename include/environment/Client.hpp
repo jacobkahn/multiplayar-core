@@ -10,9 +10,9 @@
 #include "include/environment/Entity.hpp"
 
 // The 2D representation of the anchor point of the user
-using AnchorPoint2D = cv::Point2d;
+using AnchorPoint2D = cv::Point2f;
 // The 3D anchor point for a user
-using AnchorPoint3D = cv::Point3d;
+using AnchorPoint3D = cv::Point3f;
 // A map of user ids to homography data
 using HomographyMap =
     std::unordered_map<EntityID, std::shared_ptr<HomographyTransformResult>>;

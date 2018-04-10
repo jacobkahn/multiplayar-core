@@ -11,9 +11,9 @@
 const std::string kUserIDHeaderValueHeader = "x-user-id";
 const std::string kBestCandidateLocationsHeader = "x-points";
 const std::string kObjectUpdateIDHeader = "x-object-id";
-const std::string kObjectUpdateLocationValueHeader = "x-object-location";
-const std::string kAnchorPointXHeader = "x-xcord";
-const std::string kAnchorPointYHeader = "x-ycord";
+const std::string kXLocationHeader = "x-xcord";
+const std::string kYLocationHeader = "x-ycord";
+const std::string kZLocationHeader = "x-zcord";
 
 Server::Server() {}
 
@@ -116,21 +116,16 @@ void Server::setup() {
    */
   CROW_ROUTE(app, "/object")
       .methods("POST"_method)([&](const crow::request& req) {
-        // Get user id from the request
-        std::string id = req.headers.find(kUserIDHeaderValueHeader)->second;
-
         // Get the updated location of the object in question
-        std::string rawLocation =
-            req.headers.find(kObjectUpdateLocationValueHeader)->second;
-        // Parse location into coordinates
-        std::vector<std::string> coordStrings;
-        boost::split(coordStrings, rawLocation, boost::is_any_of(","));
-        std::cout << "New object with coords " << coordStrings[0] << ", "
-                  << coordStrings[1] << ", " << coordStrings[2] << "\n";
-        Location objectLocation = cv::Point3d(
-            std::stof(coordStrings[0]),
-            std::stof(coordStrings[1]),
-            std::stof(coordStrings[2]));
+        std::string xLoc = req.headers.find(kXLocationHeader)->second;
+        std::string yLoc = req.headers.find(kYLocationHeader)->second;
+        std::string zLoc = req.headers.find(kZLocationHeader)->second;
+
+        std::cout << "Object location update at (" << xLoc << ", " << yLoc
+                  << ", " << zLoc << ")\n";
+
+        Location objectLocation =
+            cv::Point3d(std::stof(xLoc), std::stof(yLoc), std::stof(zLoc));
         // See if we're working with an existing object ID. If so, go forth
         // and update it: otherwise, create a new object. Always respond
         // with the ID
@@ -145,9 +140,7 @@ void Server::setup() {
         }
         environment_.updateObject(objectID, objectLocation);
         // Format JSON response
-        crow::json::wvalue response;
-        response["objectID"] = std::move(objectID);
-        return crow::response(response);
+        return crow::response(objectID);
       });
 
   /**
@@ -169,22 +162,24 @@ void Server::setup() {
    *    ...
    * }
    */
-  CROW_ROUTE(app, "/sync")
-      .methods("POST"_method)([&](const crow::request& req) {
-        // Get environment data
-        auto objectData = environment_.getObjectRepresentation();
+  CROW_ROUTE(app, "/sync").methods("GET"_method)([&](const crow::request& req) {
+    // Get environment data
+    auto objectData = environment_.getObjectRepresentation();
 
-        // Serialize
-        std::vector<crow::json::wvalue> objectList;
-        for (auto& object : objectData) {
-          objectList.push_back(mapToCrowWValue(object));
-        }
-        // Format JSON response
-        crow::json::wvalue response;
-        response["objects"] = std::move(objectList);
-        // TODO: send them a user field????
-        return crow::response(response);
-      });
+    // Serialize
+    std::vector<crow::json::wvalue> objectList;
+    for (auto& object : objectData) {
+      objectList.push_back(mapToCrowWValue(object));
+    }
+    // Format JSON response
+    crow::json::wvalue response;
+    response["objects"] = std::move(objectList);
+    // Users
+    std::vector<crow::json::wvalue> userList;
+    response["users"] = std::move(userList);
+    // TODO: send them a user field????
+    return crow::response(response);
+  });
 
   /**
    * A point that has been selected by the client as an anchor
@@ -198,9 +193,9 @@ void Server::setup() {
       .methods("POST"_method)([&](const crow::request& req) {
         // Get user id  from the request
         std::string id = req.headers.find(kUserIDHeaderValueHeader)->second;
-        std::string pointX = req.headers.find(kAnchorPointXHeader)->second;
-        std::string pointY = req.headers.find(kAnchorPointYHeader)->second;
-        auto point = cv::Point2f(std::stol(pointX), std::stol(pointY));
+        std::string pointX = req.headers.find(kXLocationHeader)->second;
+        std::string pointY = req.headers.find(kYLocationHeader)->second;
+        auto point = cv::Point2f(std::stod(pointX), std::stod(pointY));
         // Update anchor points for this client. Stores the point, computes a
         // homography and applies relevant anchor points to all clients who
         // don't have anchor points, etc. Any clients who are polling for anchor

@@ -45,6 +45,8 @@
         "atomic": "cpp",
         "system_error": "cpp",
         "type_traits": "cpp",
-        "complex": "cpp"
+        "complex": "cpp",
+        "unordered_set": "cpp",
+        "streambuf": "cpp"
     }
 }

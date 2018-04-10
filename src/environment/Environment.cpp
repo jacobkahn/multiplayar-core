@@ -3,6 +3,7 @@
 #include <opencv2/opencv.hpp>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include "include/environment/Client.hpp"
@@ -11,7 +12,17 @@
 PointList Environment::updateClient(
     EntityID id,
     std::string image,
-    std::vector<cv::Point2f> candidatePoints) {
+    std::vector<cv::Point2f> candidatePointsRaw) {
+  std::unordered_set<cv::Point2f, PointHasher> candidatePoints;
+  // TODO: delete me
+  std::cout << "Candidate points\n";
+  for (auto& candidatePoint : candidatePointsRaw) {
+    // TODO: remove me debug
+    std::cout << "Candidate point: (" << candidatePoint.x << ", "
+              << candidatePoint.y << ")\n";
+    candidatePoints.insert(candidatePoint);
+  }
+
   std::shared_ptr<Client> client;
   if (clientExists(id)) {
     client = clientsByID.find(id)->second;
@@ -44,17 +55,18 @@ PointList Environment::updateClient(
         // times the total number of ARKit-detected points. This is a minor
         // compuation: we're simply computing an L2 metric over the point
         // set
-        std::cout << "Matched candidate points:\n";
+        std::cout << "Matching candidate points\n";
         for (auto& point : result->pointMap[id]) {
           // Look through candidate points, track the lowest current point
-          double minDistance = 0.0;
+          double minDistance = std::numeric_limits<float>::max();
           cv::Point2f bestPoint;
+          // Check all AR points and choose the best one
           for (auto& candidatePoint : candidatePoints) {
             auto bestDistance = cv::norm(
                 cv::Mat(PointRepresentationUtils::stringyPointToPoint2f(point)),
                 cv::Mat(candidatePoint));
             // Check if this is the best candidate point
-            if (minDistance < bestDistance) {
+            if (bestDistance < minDistance) {
               minDistance = bestDistance;
               bestPoint = candidatePoint;
             }
@@ -68,7 +80,11 @@ PointList Environment::updateClient(
           bestCandidatePoints.push_back(
               PointRepresentationUtils::cvPoint2fToStringyPoint(bestPoint));
           // Print point data; TODO: remove
-          std::cout << "p: (" << bestPoint.x << ", " << bestPoint.y << ")\n";
+          std::cout << "Matched point - p: (" << bestPoint.x << ", "
+                    << bestPoint.y << ")\n";
+          // Remove this point from consideration - make sure the AR points we
+          // choose are distinct
+          candidatePoints.erase(candidatePoints.find(bestPoint));
         }
         // We only care about the first point list - that's the calling user's
         return bestCandidatePoints;

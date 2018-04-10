@@ -70,6 +70,8 @@ StringyPoint cvPoint2fToStringyPoint(cv::Point2f point);
 
 cv::Point2f stringyPointToPoint2f(StringyPoint stringyPointMap);
 
+std::string cvPoint2fToString(cv::Point2f point);
+
 } // namespace PointRepresentationUtils
 
 class SIFTClient {
