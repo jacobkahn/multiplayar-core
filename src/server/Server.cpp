@@ -16,7 +16,8 @@ const std::string kYLocationHeader = "x-ycord";
 const std::string kZLocationHeader = "x-zcord";
 const std::string kRotationHeader = "x-rotation";
 
-Server::Server(bool debugMode) : debugMode_(debugMode) {}
+Server::Server(bool debugMode, bool writeImageMode)
+    : debugMode_(debugMode), writeImageMode_(writeImageMode) {}
 
 void Server::run(uint32_t port) {
   // Start main server thread
@@ -81,6 +82,7 @@ void Server::setup() {
         }
 
         std::string image = req.body;
+        // If we're writing image data
         // Add a user to the environment or update an existing user
         auto siftOutPoints =
             environment_.updateClient(id, std::move(image), candidatePoints);
@@ -120,7 +122,7 @@ void Server::setup() {
 
         Location objectLocation =
             cv::Point3d(std::stof(xLoc), std::stof(yLoc), std::stof(zLoc));
-        auto rotation = std::stod(rawRotation);
+        auto rotation = std::stof(rawRotation);
         // See if we're working with an existing object ID. If so, go forth
         // and update it: otherwise, create a new object. Always respond
         // with the ID

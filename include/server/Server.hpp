@@ -10,7 +10,7 @@
  */
 class Server {
  public:
-  Server(bool debugMode);
+  Server(bool debugMode = false, bool writeImageMode = false);
 
   /**
    * Set up routes
@@ -34,4 +34,6 @@ class Server {
   crow::SimpleApp app;
   // The environment for this server instance
   Environment environment_;
+  // Mode which writes progressive images as they're processed
+  bool writeImageMode_{false};
 };

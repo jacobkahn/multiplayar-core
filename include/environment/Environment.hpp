@@ -51,9 +51,10 @@ class Environment {
   EntityID addObject();
 
   /**
-   * Updates an object's location in the environment, including its rotation vector
+   * Updates an object's location in the environment, including its rotation
+   * vector
    */
-  void updateObject(EntityID id, Location location, double rotation);
+  void updateObject(EntityID id, Location location, RotationScalar rotation);
 
   /**
    * Returns an object representation of

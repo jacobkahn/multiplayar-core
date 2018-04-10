@@ -4,8 +4,8 @@
 #include <iostream>
 #include <memory>
 #include <string>
-#include "include/server/Server.hpp"
 #include "include/cv/SIFT.hpp"
+#include "include/server/Server.hpp"
 
 // Default port number
 const uint32_t kDefaultPort = 10000;
@@ -18,10 +18,11 @@ int main(int argc, char* argv[]) {
   // Port number for server bind
   uint32_t port = kDefaultPort;
   bool debugMode = false;
+  bool writeImageMode = false;
 
   // Read in arguments
   int c;
-  while ((c = getopt(argc, argv, "p:avs")) != -1) {
+  while ((c = getopt(argc, argv, "p:avsi")) != -1) {
     switch (c) {
       case 'p':
         try {
@@ -43,6 +44,9 @@ int main(int argc, char* argv[]) {
         // Run Toy SIFT
         std::make_unique<SIFTClient>()->runToySIFT();
         return 0;
+      case 'i':
+        writeImageMode = true;
+        break;
       case '?':
         if (optopt == 'c') {
           fprintf(stderr, "Option -%c requires an argument.\n", optopt);

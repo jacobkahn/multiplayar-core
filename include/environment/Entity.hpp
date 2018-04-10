@@ -5,6 +5,8 @@
 
 // A coordinate representation as a Cartesian Boost geometry point
 using Location = cv::Point3d;
+// A scalar rotation measure
+using RotationScalar = float;
 
 // Entity string
 using EntityID = std::string;
@@ -34,12 +36,12 @@ class Entity {
   /**
    * Returns the rotation scalar for this entity
    */
-  double getRotation() const;
+  RotationScalar getRotation() const;
 
   /**
    * Updates the location for this entity
    */
-  void updateLocation(Location location, double rotation);
+  void updateLocation(Location location, RotationScalar rotation);
 
  private:
   // Some entity type of the object
@@ -47,5 +49,5 @@ class Entity {
   // The location of the object in AR space
   Location location_;
   // The rotation of the object with respect to true north in AR space
-  double rotationScalar_;
+  RotationScalar rotationScalar_;
 };

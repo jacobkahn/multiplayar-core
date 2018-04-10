@@ -124,7 +124,7 @@ EntityID Environment::addObject() {
 void Environment::updateObject(
     EntityID id,
     Location location,
-    double rotation) {
+    RotationScalar rotation) {
   auto iter = objectsByID.find(id);
   if (iter != objectsByID.end()) {
     iter->second->updateLocation(location, rotation);

@@ -15,11 +15,11 @@ Location Entity::getLocation() const {
   return location_;
 }
 
-void Entity::updateLocation(Location location, double rotation) {
+void Entity::updateLocation(Location location, RotationScalar rotation) {
   location_ = location;
   rotationScalar_ = rotation;
 }
 
-double Entity::getRotation() const {
+RotationScalar Entity::getRotation() const {
   return rotationScalar_;
 }
