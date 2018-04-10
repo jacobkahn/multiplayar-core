@@ -14,6 +14,7 @@ const std::string kObjectUpdateIDHeader = "x-object-id";
 const std::string kXLocationHeader = "x-xcord";
 const std::string kYLocationHeader = "x-ycord";
 const std::string kZLocationHeader = "x-zcord";
+const std::string kRotationHeader = "x-rotation";
 
 Server::Server(bool debugMode) : debugMode_(debugMode) {}
 
@@ -110,6 +111,7 @@ void Server::setup() {
         std::string xLoc = req.headers.find(kXLocationHeader)->second;
         std::string yLoc = req.headers.find(kYLocationHeader)->second;
         std::string zLoc = req.headers.find(kZLocationHeader)->second;
+        std::string rawRotation = req.headers.find(kRotationHeader)->second;
 
         if (debugMode_) {
           std::cout << "Object location update at (" << xLoc << ", " << yLoc
@@ -118,6 +120,7 @@ void Server::setup() {
 
         Location objectLocation =
             cv::Point3d(std::stof(xLoc), std::stof(yLoc), std::stof(zLoc));
+        auto rotation = std::stod(rawRotation);
         // See if we're working with an existing object ID. If so, go forth
         // and update it: otherwise, create a new object. Always respond
         // with the ID
@@ -130,7 +133,7 @@ void Server::setup() {
           // Create a new object with a sequentially-generated ID
           objectID = environment_.addObject();
         }
-        environment_.updateObject(objectID, objectLocation);
+        environment_.updateObject(objectID, objectLocation, rotation);
         // Format JSON response
         return crow::response(objectID);
       });
@@ -234,5 +237,16 @@ void Server::setup() {
           // If no anchor has been initialized, send back the empty string
           return crow::response("");
         }
+      });
+
+  /**
+   * Clears the environment of all AR users and AR objects. Equivalent to a full
+   * reset of the server
+   */
+  CROW_ROUTE(app, "/clear")
+      .methods("GET"_method)([&](const crow::request& req) {
+        // Clear the environment
+        environment_.clear();
+        return crow::response("");
       });
 }

@@ -121,10 +121,13 @@ EntityID Environment::addObject() {
   return object->getID();
 }
 
-void Environment::updateObject(EntityID id, Location location) {
+void Environment::updateObject(
+    EntityID id,
+    Location location,
+    double rotation) {
   auto iter = objectsByID.find(id);
   if (iter != objectsByID.end()) {
-    iter->second->updateLocation(location);
+    iter->second->updateLocation(location, rotation);
   } else {
     // Invalid object ID: simply return and do nothing
   }
@@ -134,10 +137,12 @@ ObjectData Environment::getObjectRepresentation() {
   ObjectData data;
   for (auto& object : objects) {
     auto location = object->getLocation();
+    auto rotation = object->getRotation();
     data.push_back({{"id", object->getID()},
                     {"x", std::to_string(location.x)},
                     {"y", std::to_string(location.y)},
-                    {"z", std::to_string(location.z)}});
+                    {"z", std::to_string(location.z)},
+                    {"rotation", std::to_string(rotation)}});
   }
   return data;
 }
@@ -154,10 +159,11 @@ void Environment::update2DAnchorForClient(EntityID id, cv::Point2f point) {
     auto otherClient = getClientByID(entry.first);
     if (!otherClient->hasInitializedAnchor()) {
       auto homography = homographyData->homographyMap[id];
-      // Look up which SIFT point this AR point was matched to so we can get the
-      // corresponding point from the computed homography
+      // Look up which SIFT point this AR point was matched to so we can get
+      // the corresponding point from the computed homography
       auto originalSIFTPoint = homographyData->siftToARPointMapping[point];
-      // Look up the index of the point in the map to get the corresponding one
+      // Look up the index of the point in the map to get the corresponding
+      // one
       size_t pointIndex = 0;
       for (auto& siftPoint : homographyData->pointMap[client->getID()]) {
         if (PointRepresentationUtils::cvPoint2fToStringyPoint(
@@ -169,8 +175,8 @@ void Environment::update2DAnchorForClient(EntityID id, cv::Point2f point) {
       // The transformed point for the other client
       cv::Point2f transformedPoint;
       // Get the corresponding point in the other client's list. We need to
-      // iterate through all entities and their related point lists (it's simply
-      // this client and the other client)
+      // iterate through all entities and their related point lists (it's
+      // simply this client and the other client)
       auto iter = homographyData->pointMap.begin();
       for (; iter != homographyData->pointMap.end(); iter++) {
         if (iter->first != client->getID()) {
@@ -194,4 +200,13 @@ void Environment::update2DAnchorForClient(EntityID id, cv::Point2f point) {
       otherClient->update2DAnchorPoints(bestPoint);
     }
   }
+}
+
+void Environment::clear() {
+  // Clear clients list
+  clients.clear();
+  clientsByID.clear();
+  // Clear objects
+  objects.clear();
+  objectsByID.clear();
 }

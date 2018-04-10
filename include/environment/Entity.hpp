@@ -32,11 +32,20 @@ class Entity {
   Location getLocation() const;
 
   /**
+   * Returns the rotation scalar for this entity
+   */
+  double getRotation() const;
+
+  /**
    * Updates the location for this entity
    */
-  void updateLocation(Location location);
+  void updateLocation(Location location, double rotation);
 
  private:
+  // Some entity type of the object
   EntityID id_;
+  // The location of the object in AR space
   Location location_;
+  // The rotation of the object with respect to true north in AR space
+  double rotationScalar_;
 };

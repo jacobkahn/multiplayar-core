@@ -51,9 +51,9 @@ class Environment {
   EntityID addObject();
 
   /**
-   * Updates an object's location in the environment
+   * Updates an object's location in the environment, including its rotation vector
    */
-  void updateObject(EntityID id, Location location);
+  void updateObject(EntityID id, Location location, double rotation);
 
   /**
    * Returns an object representation of
@@ -69,6 +69,11 @@ class Environment {
    * ]
    */
   ObjectData getObjectRepresentation();
+
+  /**
+   * Clear the environment of all objects and users: do a hard reset.
+   */
+  void clear();
 
  private:
   //  Collection of clients in this environment
