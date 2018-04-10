@@ -68,3 +68,11 @@ void Client::addHomographyTransformResult(
 const HomographyMap& Client::getHomographyMap() const {
   return otherClientHomographies_;
 }
+
+std::vector<cv::Point2f> Client::getCandidatePoints() const {
+  return candidatePoints_;
+}
+
+void Client::setCandidatePoints(std::vector<cv::Point2f> points) {
+  candidatePoints_ = points;
+}

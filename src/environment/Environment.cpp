@@ -33,6 +33,8 @@ PointList Environment::updateClient(
     clients.push_back(client);
     clientsByID.insert(std::make_pair(id, client));
   }
+  // Score candidate points for the client
+  client->setCandidatePoints(candidatePointsRaw);
 
   // Attempt to compute homography with another client
   // Make sure we're not the only client
@@ -44,6 +46,17 @@ PointList Environment::updateClient(
         auto siftClient = std::make_unique<SIFTClient>();
         auto result = siftClient->computeHomographyTransformationFromClients(
             client, otherClient);
+
+        // TODO: remove me
+        for (auto& ent : result->pointMap) {
+          std::cout << "Entity ID with " << ent.first << "\nPoints:\n";
+          for (auto& p : ent.second) {
+            std::cout << PointRepresentationUtils::cvPoint2fToString(
+                             PointRepresentationUtils::stringyPointToPoint2f(p))
+                      << "\n";
+          }
+        }
+
         // Store the result of the homography with the other user inside the
         // mapping for this user so we can retrieve it for anchor calibration
         // later
@@ -167,8 +180,18 @@ void Environment::update2DAnchorForClient(EntityID id, cv::Point2f point) {
               iter->second[pointIndex]);
         }
       }
-      // Update the client's anchor with this new homography
-      otherClient->update2DAnchorPoints(transformedPoint);
+      // Compute the optimal candidate point - the AR point that is closest to
+      // the inverse transformed point
+      cv::Point2f bestPoint;
+      double minDistance = std::numeric_limits<float>::max();
+      for (auto& candPoint : otherClient->getCandidatePoints()) {
+        auto dist = cv::norm(cv::Mat(candPoint), cv::Mat(transformedPoint));
+        if (dist < minDistance) {
+          bestPoint = candPoint;
+        }
+      }
+      // Update the client's anchor with this new point
+      otherClient->update2DAnchorPoints(bestPoint);
     }
   }
 }

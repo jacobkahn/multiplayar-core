@@ -46,6 +46,10 @@ class Client : public Entity {
 
   const HomographyMap& getHomographyMap() const;
 
+  void setCandidatePoints(std::vector<cv::Point2f> points);
+
+  std::vector<cv::Point2f> getCandidatePoints() const;
+
  private:
   // Keypoints associated with this client's last orientation
   std::vector<cv::KeyPoint> keypoints_;
@@ -61,4 +65,6 @@ class Client : public Entity {
   bool initializedAnchor_{false};
   // 2D anchor points for this client
   AnchorPoint2D anchor2D_;
+  // Candidate AR points that this client has given during calibration
+  std::vector<cv::Point2f> candidatePoints_;
 };

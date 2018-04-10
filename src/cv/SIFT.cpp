@@ -2,7 +2,6 @@
 #include <opencv2/core/cvstd.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/xfeatures2d.hpp>
-#include "opencv2/xfeatures2d.hpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -28,7 +27,8 @@ cv::Point2f PointRepresentationUtils::stringyPointToPoint2f(
 }
 
 std::string PointRepresentationUtils::cvPoint2fToString(cv::Point2f point) {
-  std::string s = "(" + std::to_string(point.x) + ", " + std::to_string(point.y) + ")";
+  std::string s =
+      "(" + std::to_string(point.x) + ", " + std::to_string(point.y) + ")";
   return s;
 }
 
@@ -38,6 +38,49 @@ const size_t kMinPointsHomographyThreshold = 6;
 const size_t kMaxPointsHomographyHeap = 75;
 // Constant for Lowe's ratio test across the best matches
 const double kRatioTestConstant = 2;
+// Centrality score threshold
+const size_t kCentralityScoreNumberOfPointComparisons = 5;
+// Number of points to return from SIFT
+const size_t kNumMatchesToReturn = 4;
+
+double SIFTClient::computeCentralityScoreForPoint(
+    cv::Point2f queryPoint,
+    const std::vector<cv::Point2f>& candidatePoints) {
+  // Given two other points, prefer the closest one
+  auto cmp = [&](cv::Point2f left, cv::Point2f right) {
+    auto leftDistance = cv::norm(cv::Mat(queryPoint), cv::Mat(left));
+    auto rightDistance = cv::norm(cv::Mat(queryPoint), cv::Mat(right));
+    return leftDistance > rightDistance;
+  };
+  std::priority_queue<cv::Point2f, std::vector<cv::Point2f>, decltype(cmp)>
+      matchMaxHeap(cmp);
+  for (size_t i = 0; i < candidatePoints.size(); i++) {
+    // std::cout << "Match distances " << filteredMatches[i].distance << "\n";
+    // Add to heap
+    matchMaxHeap.push(candidatePoints[i]);
+    // If we're at capacity, pop the top element
+    if (matchMaxHeap.size() > kCentralityScoreNumberOfPointComparisons) {
+      matchMaxHeap.pop();
+    }
+  }
+  // Remove everything, save to vector
+  double totalDistanceScore = 0.0;
+  while (matchMaxHeap.size() != 0) {
+    totalDistanceScore +=
+        cv::norm(cv::Mat(queryPoint), cv::Mat(matchMaxHeap.top()));
+    matchMaxHeap.pop();
+  }
+  return totalDistanceScore;
+}
+
+double SIFTClient::computeCentralityScore(
+    cv::Point2f queryPoint,
+    cv::Point2f trainPoint,
+    const std::vector<cv::Point2f>& queryCandidatePoints,
+    const std::vector<cv::Point2f>& trainCandidatePoints) {
+  return computeCentralityScoreForPoint(queryPoint, queryCandidatePoints) +
+      computeCentralityScoreForPoint(trainPoint, trainCandidatePoints);
+}
 
 std::pair<std::vector<cv::KeyPoint>, cv::Mat>
 SIFTClient::detectAndComputeKeypointsAndDescriptors(const cv::Mat& image) {
@@ -63,6 +106,8 @@ SIFTClient::computeHomographyTransformationFromClients(
   auto transformData = computeHomographyTransformation(
       client1->getKeypoints(),
       client2->getKeypoints(),
+      client1->getCandidatePoints(),
+      client2->getCandidatePoints(),
       client1->getDescriptors(),
       client2->getDescriptors(),
       client1->getRows(),
@@ -94,6 +139,9 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
     // Keypoints to be extracted from image
     std::vector<cv::KeyPoint> queryKeypoints,
     std::vector<cv::KeyPoint> trainKeypoints,
+    // AR points with which to rank point matches
+    const std::vector<cv::Point2f>& queryCandidatePoints,
+    const std::vector<cv::Point2f>& trainCandidatePoints,
     // Descriptors to be extracted from image
     cv::Mat queryDescriptors,
     cv::Mat trainDescriptors,
@@ -150,7 +198,7 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
     }
   }
   // Remove everything, save to vector
-  std::vector<cv::DMatch> goodMatches = std::vector<cv::DMatch>();
+  std::vector<cv::DMatch> goodMatches;
   while (matchMaxHeap.size() != 0) {
     goodMatches.push_back(matchMaxHeap.top());
     matchMaxHeap.pop();
@@ -165,12 +213,57 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
     return emptyData;
   }
 
+  /***** Rank Matches based on centrality AR candidate point scores *****/
+  // Pre-compute scores and place into a map
+  std::unordered_map<cv::DMatch, double, MatchHasher, MatchEquals> matchScores;
+  for (auto& match : goodMatches) {
+    auto score = computeCentralityScore(
+        queryKeypoints[match.queryIdx].pt,
+        trainKeypoints[match.trainIdx].pt,
+        queryCandidatePoints,
+        trainCandidatePoints);
+    matchScores.insert({match, score});
+  }
+  // Put everything in a heap
+  auto dMatchCmp = [&](cv::DMatch left, cv::DMatch right) {
+    return matchScores.at(left) > matchScores.at(right);
+  };
+  // Make a match queue
+  std::priority_queue<cv::DMatch, std::vector<cv::DMatch>, decltype(dMatchCmp)>
+      matchHeap(dMatchCmp);
+  for (size_t i = 0; i < goodMatches.size(); i++) {
+    // std::cout << "Match distances " << filteredMatches[i].distance << "\n";
+    // Add to heap
+    matchHeap.push(goodMatches[i]);
+    // If we're at capacity, pop the top element
+    if (matchHeap.size() > kNumMatchesToReturn) {
+      matchHeap.pop();
+    }
+  }
+  // Remove everything, save to vector
+  std::vector<cv::DMatch> betterMatches;
+  while (matchHeap.size() != 0) {
+    betterMatches.push_back(matchHeap.top());
+    matchHeap.pop();
+  }
+
   // Get keypoints that we care about
   std::vector<cv::Point2f> finalQueryKeypoints;
   std::vector<cv::Point2f> finalTrainKeypoints;
-  for (auto& match : goodMatches) {
+  for (auto& match : betterMatches) {
     finalQueryKeypoints.push_back(queryKeypoints[match.queryIdx].pt);
     finalTrainKeypoints.push_back(trainKeypoints[match.trainIdx].pt);
+  }
+
+  PointList finalQueryPointList;
+  for (auto& point : finalQueryKeypoints) {
+    finalQueryPointList.push_back(
+        PointRepresentationUtils::cvPoint2fToStringyPoint(point));
+  }
+  PointList finalTrainPointList;
+  for (auto& point : finalTrainKeypoints) {
+    finalTrainPointList.push_back(
+        PointRepresentationUtils::cvPoint2fToStringyPoint(point));
   }
 
   /***** Find Homography *****/
@@ -180,48 +273,9 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
   cv::Mat TQhomography =
       cv::findHomography(finalTrainKeypoints, finalQueryKeypoints);
 
-  /***** Perspective transform for query image *****/
-  std::vector<cv::Point2f> queryImageCorners(4);
-  // Compute dimensions of images
-  queryImageCorners[0] = cv::Point2f(0, 0);
-  queryImageCorners[1] = cv::Point2f(queryCols, 0);
-  queryImageCorners[2] = cv::Point2f(queryCols, queryRows);
-  queryImageCorners[3] = cv::Point2f(0, queryRows);
-
-  /***** Perspective transform for train image *****/
-  std::vector<cv::Point2f> trainImageCorners(4);
-  // Compute dimensions of images
-  trainImageCorners[0] = cv::Point2f(0, 0);
-  trainImageCorners[1] = cv::Point2f(trainCols, 0);
-  trainImageCorners[2] = cv::Point2f(trainCols, trainRows);
-  trainImageCorners[3] = cv::Point2f(0, trainRows);
-
-  std::vector<cv::Point2f> queryWorldCorners = std::vector<cv::Point2f>(4);
-  std::vector<cv::Point2f> trainWorldCorners = std::vector<cv::Point2f>(4);
-
-  /***** Perform perspective transform *****/
-  // Find dimensions of both images so we can apply the homography to the
-  // source images to compute 2D markers for anchor offsets Compute
-  // transform. Save world corners for both in the client
-  cv::perspectiveTransform(trainImageCorners, trainWorldCorners, TQhomography);
-  cv::perspectiveTransform(queryImageCorners, queryWorldCorners, QThomography);
-
-  std::cout << "Query world corners " << queryWorldCorners << "\n";
-  std::cout << "Train world corners " << trainWorldCorners << "\n";
-
-  // Format for res
-  PointList queryPoints, trainPoints;
-  for (size_t i = 0; i < queryWorldCorners.size(); i++) {
-    queryPoints.push_back(PointRepresentationUtils::cvPoint2fToStringyPoint(
-        queryWorldCorners[i]));
-  }
-  for (size_t i = 0; i < trainWorldCorners.size(); i++) {
-    trainPoints.push_back(PointRepresentationUtils::cvPoint2fToStringyPoint(
-        trainWorldCorners[i]));
-  }
   // Return special data structure
   return std::make_pair(
-      std::make_pair(queryPoints, trainPoints),
+      std::make_pair(finalQueryPointList, finalTrainPointList),
       std::make_pair(QThomography, TQhomography));
 }
 
@@ -276,8 +330,8 @@ void SIFTClient::runToySIFT() {
   // Matches we find from the compare
   std::vector<std::vector<cv::DMatch>> matches;
   matcher.knnMatch(queryDescriptors, trainDescriptors, matches, 2);
-  // We use Lowe's Euclidean ratio test to measure the match distance to assess
-  // how good them matches are y'all
+  // We use Lowe's Euclidean ratio test to measure the match distance to
+  // assess how good them matches are y'all
   std::vector<cv::DMatch> filteredMatches;
 
   for (int k = 0; k < std::min(queryDescriptors.rows - 1, (int)matches.size());
@@ -341,9 +395,8 @@ void SIFTClient::runToySIFT() {
   queryWorldCorners[1] = cv::Point2f(queryImage.cols, 0);
   queryWorldCorners[2] = cv::Point2f(queryImage.cols, queryImage.rows);
   queryWorldCorners[3] = cv::Point2f(0, queryImage.rows);
-  // Find dimensions of both images so we can apply the homography to the source
-  // images to compute 2D markers for anchor offsets
-  // Compute transform
+  // Find dimensions of both images so we can apply the homography to the
+  // source images to compute 2D markers for anchor offsets Compute transform
   cv::perspectiveTransform(queryWorldCorners, trainWorldCorners, homography);
 
   cv::Mat imageDrawMatches;

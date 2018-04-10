@@ -94,6 +94,11 @@ void Server::setup() {
         auto siftOutPoints =
             environment_.updateClient(id, std::move(image), candidatePoints);
 
+        // TODO: remove me - write the file
+        std::ofstream out("serverOutput" + id + ".png");
+        out << req.body;
+        out.close();
+
         // Format points for transport - json
         std::vector<crow::json::wvalue> pointList;
         for (auto& aSiftPoint : siftOutPoints) {
