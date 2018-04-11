@@ -8,6 +8,7 @@
 #include <vector>
 #include "include/environment/Client.hpp"
 #include "include/environment/Object.hpp"
+#include "include/cv/SIFTWriter.hpp"
 
 PointList Environment::updateClient(
     EntityID id,
@@ -209,4 +210,8 @@ void Environment::clear() {
   // Clear objects
   objects.clear();
   objectsByID.clear();
+}
+
+std::vector<std::shared_ptr<Client>> Environment::getClientList() {
+  return clients;
 }

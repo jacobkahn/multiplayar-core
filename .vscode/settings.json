@@ -47,6 +47,7 @@
         "type_traits": "cpp",
         "complex": "cpp",
         "unordered_set": "cpp",
-        "streambuf": "cpp"
+        "streambuf": "cpp",
+        "iostream": "cpp"
     }
 }

@@ -6,8 +6,10 @@
 #include <thread>
 #include <unordered_map>
 #include "include/cv/SIFT.hpp"
+#include "include/cv/SIFTWriter.hpp"
 #include "include/deps/crow.h"
 
+// Relevant headers for request parsing
 const std::string kUserIDHeaderValueHeader = "x-user-id";
 const std::string kBestCandidateLocationsHeader = "x-points";
 const std::string kObjectUpdateIDHeader = "x-object-id";
@@ -15,6 +17,11 @@ const std::string kXLocationHeader = "x-xcord";
 const std::string kYLocationHeader = "x-ycord";
 const std::string kZLocationHeader = "x-zcord";
 const std::string kRotationHeader = "x-rotation";
+// JSON data field names
+const std::string kImageQueryIDFieldName = "id";
+const std::string kImageQueryID1FieldName = "id1";
+const std::string kImageQueryID2FieldName = "id2";
+const std::string kImageQueryStageFieldName = "stage";
 
 Server::Server(bool debugMode, bool writeImageMode)
     : debugMode_(debugMode), writeImageMode_(writeImageMode) {}
@@ -86,6 +93,21 @@ void Server::setup() {
         // Add a user to the environment or update an existing user
         auto siftOutPoints =
             environment_.updateClient(id, std::move(image), candidatePoints);
+
+        // Write raw image data in a separate thread
+        // auto writeThread = std::thread([&]() {
+        std::cout << "Write original image\n";
+        auto writer = std::make_shared<SIFTWriter>();
+        std::ofstream outStream1(writer->computeSingleFilenameForID(id, 1));
+        outStream1 << image;
+        outStream1.close();
+        std::cout << "Write keypoints and ar points\n";
+        writer->createImageWithKeypointsAndARPoints(
+            id,
+            environment_.getClientByID(id)->getKeypoints(),
+            candidatePoints);
+        // });
+        // writeThread.detach();
 
         // Format points for transport - json
         std::vector<crow::json::wvalue> pointList;
@@ -250,5 +272,66 @@ void Server::setup() {
         // Clear the environment
         environment_.clear();
         return crow::response("");
+      });
+
+  /**
+   * Returns all ID for clients currently associated with the environment
+   */
+  CROW_ROUTE(app, "/ids").methods("GET"_method)([&](const crow::request& req) {
+    std::vector<crow::json::wvalue> ids;
+    for (auto& client : environment_.getClientList()) {
+      crow::json::wvalue idItem;
+      idItem["id"] = client->getID();
+      ids.push_back(std::move(idItem));
+    }
+    crow::json::wvalue response;
+    response["ids"] = std::move(ids);
+    return crow::response(response);
+  });
+
+  /**
+   * Gets the image
+   */
+  CROW_ROUTE(app, "/imagequery")
+      .methods("GET"_method)([&](const crow::request& req) {
+        auto json = crow::json::load(req.body);
+        if (!json) {
+          return crow::response(400);
+        }
+
+        std::string responseBuffer;
+        // Image stage
+        auto stage = json[kImageQueryStageFieldName].i();
+        if (stage < 1 || stage > 4) {
+          return crow::response(400);
+        }
+        // Create a writer to get data
+        auto writer = std::make_shared<SIFTWriter>();
+        // Process
+        if (json.has(kImageQueryIDFieldName)) {
+          // This is a single query
+          auto id = json[kImageQueryIDFieldName].s();
+
+          if (debugMode_) {
+            std::cout << "Single image query for id " << id << " at stage "
+                      << stage << "\n";
+          }
+
+          responseBuffer = writer->getSingleImageDataForID(id, stage);
+        } else {
+          // Compound query
+          auto id1 = json[kImageQueryID1FieldName].s();
+          auto id2 = json[kImageQueryID2FieldName].s();
+
+          if (debugMode_) {
+            std::cout << "Duplex image query for id1: " << id1
+                      << ", id2: " << id2 << " at stage " << stage << "\n";
+          }
+
+          // Get images
+          responseBuffer = writer->getCompoundImageDataForIDs(id1, id2, stage);
+        }
+
+        return crow::response(responseBuffer);
       });
 }

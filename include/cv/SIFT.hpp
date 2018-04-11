@@ -124,6 +124,8 @@ class SIFTClient {
       std::shared_ptr<Client> client2);
 
  private:
+  // The good matchings as computed by this client
+  std::vector<cv::DMatch> goodMatches_;
   /**
    * Compute point ranking given a point and some candidate points.
    *
@@ -151,25 +153,24 @@ class SIFTClient {
       const std::vector<cv::Point2f>& trainCandidatePoints);
 
   /**
+   * Given keypoints, descriptors, and dimensions, compute matchings
+   * (non-optimal)
+   */
+  std::vector<cv::DMatch> computeMatchings(
+      // Descriptors to be extracted from image
+      cv::Mat queryDescriptors,
+      cv::Mat trainDescriptors);
+
+  /**
    * Given two pieces of raw image data, run SIFT, find a homography, and
    * perform a perspective transform. Return the ordered point data in the
    * order of the iamge data (the first transform on the first image, and the
    * second transform on the second image)
    */
   RawHomographyData computeHomographyTransformation(
-      // Keypoints to be extracted from image
       std::vector<cv::KeyPoint> queryKeypoints,
       std::vector<cv::KeyPoint> trainKeypoints,
-      // Candidate points with which to rank DMatches
       const std::vector<cv::Point2f>& queryCandidatePoints,
       const std::vector<cv::Point2f>& trainCandidatePoints,
-      // Descriptors to be extracted from image
-      cv::Mat queryDescriptors,
-      cv::Mat trainDescriptors,
-      // The dimensions of the query image
-      int queryRows,
-      int queryCols,
-      // The dimensions of the train image
-      int trainRows,
-      int trainCols);
+      std::vector<cv::DMatch> filteredMatches);
 };

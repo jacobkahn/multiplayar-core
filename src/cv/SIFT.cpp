@@ -8,9 +8,11 @@
 #include <memory>
 #include <queue>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include "include/cv/SIFTWriter.hpp"
 #include "include/environment/Client.hpp"
 
 StringyPoint PointRepresentationUtils::cvPoint2fToStringyPoint(
@@ -102,18 +104,47 @@ std::shared_ptr<HomographyTransformResult>
 SIFTClient::computeHomographyTransformationFromClients(
     std::shared_ptr<Client> client1,
     std::shared_ptr<Client> client2) {
+  // Compute good matchings
+  auto matchings =
+      computeMatchings(client1->getDescriptors(), client2->getDescriptors());
+
+  // Write matchings to file
+  auto thread1 = std::thread([&]() {
+    auto writer = std::make_shared<SIFTWriter>();
+    auto filenames = writer->computeCompoundFilenamesForIDs(
+        client1->getID(), client2->getID(), 3);
+    writer->createImageWithMachings(
+        client1->getID(),
+        client2->getID(),
+        goodMatches_,
+        client1->getKeypoints(),
+        client2->getKeypoints(),
+        3);
+    ;
+  });
+  thread1.detach();
+
   // Compute the homography with raw datas and return candidate points
   auto transformData = computeHomographyTransformation(
       client1->getKeypoints(),
       client2->getKeypoints(),
       client1->getCandidatePoints(),
       client2->getCandidatePoints(),
-      client1->getDescriptors(),
-      client2->getDescriptors(),
-      client1->getRows(),
-      client1->getCols(),
-      client2->getRows(),
-      client2->getCols());
+      matchings);
+
+  // Write matchings to file
+  auto thread2 = std::thread([&]() {
+    auto writer = std::make_shared<SIFTWriter>();
+    writer->createImageWithMachings(
+        client1->getID(),
+        client2->getID(),
+        goodMatches_,
+        client1->getKeypoints(),
+        client2->getKeypoints(),
+        4);
+  });
+  thread2.detach();
+
   // Make a new result
   auto result = std::make_shared<HomographyTransformResult>();
   // The first two fields in the result are point data for client 1 and client
@@ -135,22 +166,10 @@ SIFTClient::computeHomographyTransformationFromClients(
  * Given an image
  * Returns a tuple of images after a perspectice transform
  */
-RawHomographyData SIFTClient::computeHomographyTransformation(
-    // Keypoints to be extracted from image
-    std::vector<cv::KeyPoint> queryKeypoints,
-    std::vector<cv::KeyPoint> trainKeypoints,
-    // AR points with which to rank point matches
-    const std::vector<cv::Point2f>& queryCandidatePoints,
-    const std::vector<cv::Point2f>& trainCandidatePoints,
+std::vector<cv::DMatch> SIFTClient::computeMatchings(
     // Descriptors to be extracted from image
     cv::Mat queryDescriptors,
-    cv::Mat trainDescriptors,
-    // The dimensions of the query image
-    int queryRows,
-    int queryCols,
-    // The dimensions of the train image
-    int trainRows,
-    int trainCols) {
+    cv::Mat trainDescriptors) {
   // Make a new FLANN KD dtree
   const cv::Ptr<cv::flann::IndexParams>& indexParams =
       new cv::flann::KDTreeIndexParams(5);
@@ -180,7 +199,15 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
       filteredMatches.push_back(matches[k][0]);
     }
   }
+  return filteredMatches;
+}
 
+RawHomographyData SIFTClient::computeHomographyTransformation(
+    std::vector<cv::KeyPoint> queryKeypoints,
+    std::vector<cv::KeyPoint> trainKeypoints,
+    const std::vector<cv::Point2f>& queryCandidatePoints,
+    const std::vector<cv::Point2f>& trainCandidatePoints,
+    std::vector<cv::DMatch> filteredMatches) {
   // Count the number of mathes where the distance is less than 2 * min_dist
   // Lambda comparator between distance fields of DMatches
   auto cmp = [](cv::DMatch left, cv::DMatch right) {
@@ -246,6 +273,8 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
     betterMatches.push_back(matchHeap.top());
     matchHeap.pop();
   }
+  // Save best matches
+  goodMatches_ = betterMatches;
 
   // Get keypoints that we care about
   std::vector<cv::Point2f> finalQueryKeypoints;
@@ -412,30 +441,30 @@ void SIFTClient::runToySIFT() {
       std::vector<char>(),
       cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
 
-  cv::line(
-      imageDrawMatches,
-      trainWorldCorners[0] + cv::Point2f(queryImage.cols, 0),
-      trainWorldCorners[1] + cv::Point2f(queryImage.cols, 0),
-      cv::Scalar(0, 255, 0),
-      4);
-  cv::line(
-      imageDrawMatches,
-      trainWorldCorners[1] + cv::Point2f(queryImage.cols, 0),
-      trainWorldCorners[2] + cv::Point2f(queryImage.cols, 0),
-      cv::Scalar(0, 255, 0),
-      4);
-  cv::line(
-      imageDrawMatches,
-      trainWorldCorners[2] + cv::Point2f(queryImage.cols, 0),
-      trainWorldCorners[3] + cv::Point2f(queryImage.cols, 0),
-      cv::Scalar(0, 255, 0),
-      4);
-  cv::line(
-      imageDrawMatches,
-      trainWorldCorners[3] + cv::Point2f(queryImage.cols, 0),
-      trainWorldCorners[0] + cv::Point2f(queryImage.cols, 0),
-      cv::Scalar(0, 255, 0),
-      4);
+  //   cv::line(
+  //       imageDrawMatches,
+  //       trainWorldCorners[0] + cv::Point2f(queryImage.cols, 0),
+  //       trainWorldCorners[1] + cv::Point2f(queryImage.cols, 0),
+  //       cv::Scalar(0, 255, 0),
+  //       4);
+  //   cv::line(
+  //       imageDrawMatches,
+  //       trainWorldCorners[1] + cv::Point2f(queryImage.cols, 0),
+  //       trainWorldCorners[2] + cv::Point2f(queryImage.cols, 0),
+  //       cv::Scalar(0, 255, 0),
+  //       4);
+  //   cv::line(
+  //       imageDrawMatches,
+  //       trainWorldCorners[2] + cv::Point2f(queryImage.cols, 0),
+  //       trainWorldCorners[3] + cv::Point2f(queryImage.cols, 0),
+  //       cv::Scalar(0, 255, 0),
+  //       4);
+  //   cv::line(
+  //       imageDrawMatches,
+  //       trainWorldCorners[3] + cv::Point2f(queryImage.cols, 0),
+  //       trainWorldCorners[0] + cv::Point2f(queryImage.cols, 0),
+  //       cv::Scalar(0, 255, 0),
+  //       4);
 
   cv::imwrite("out.png", imageDrawMatches);
 }

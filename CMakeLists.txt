@@ -51,6 +51,7 @@ add_library(
 add_library(
     cv
     src/cv/SIFT.cpp
+    src/cv/SIFTWriter.cpp
 )
 
 # Output

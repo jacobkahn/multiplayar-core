@@ -71,6 +71,8 @@ class Environment {
    */
   ObjectData getObjectRepresentation();
 
+  std::vector<std::shared_ptr<Client>> getClientList();
+
   /**
    * Clear the environment of all objects and users: do a hard reset.
    */
