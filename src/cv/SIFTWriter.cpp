@@ -5,10 +5,40 @@
 #include <utility>
 #include "include/environment/Entity.hpp"
 
+const std::string kFileExtension = ".png";
+
 SIFTWriter::SIFTWriter() {}
 
 void SIFTWriter::writeImage(const std::string& filename, const cv::Mat& image) {
-  cv::imwrite(filename, image);
+  std::vector<int> params;
+  // params.push_back(CV_IMWRITE_PNG_COMPRESSION);
+  // params.push_back(9);
+  cv::imwrite(filename + kFileExtension, image, params);
+}
+
+cv::Mat SIFTWriter::readImageAsMatrix(const std::string& fileID) {
+  return cv::imread(fileID + kFileExtension, CV_LOAD_IMAGE_COLOR);
+}
+
+std::string SIFTWriter::readFileByFileID(std::string fileID) {
+  std::ifstream myStream(fileID + kFileExtension, std::ios::binary);
+  std::string outBuffer;
+  std::ostringstream oStream;
+  oStream << myStream.rdbuf();
+  return oStream.str();
+}
+
+void SIFTWriter::writeFileByID(std::string fileID, std::string buffer) {
+  std::ofstream outStream;
+  outStream.open(
+      fileID + kFileExtension, std::ios_base::out | std::ios_base::binary);
+  outStream << buffer;
+  outStream.close();
+}
+
+bool SIFTWriter::fileWithIDExists(std::string fileID) {
+  std::ifstream testStream(fileID + kFileExtension);
+  return testStream.good();
 }
 
 size_t
@@ -33,12 +63,8 @@ std::pair<std::string, std::string> SIFTWriter::computeCompoundFilenamesForIDs(
 }
 
 std::string SIFTWriter::getSingleImageDataForID(EntityID id, Stage stage) {
-  auto filename = computeSingleFilenameForID(id, stage);
-  std::ifstream stream(filename);
-  std::string buffer;
-  stream >> std::noskipws;
-  stream >> buffer;
-  return buffer;
+  auto fileId = computeSingleFilenameForID(id, stage);
+  return readFileByFileID(fileId);
 }
 
 std::string SIFTWriter::getCompoundImageDataForIDs(
@@ -49,35 +75,31 @@ std::string SIFTWriter::getCompoundImageDataForIDs(
   auto candidates = computeCompoundFilenamesForIDs(id1, id2, stage);
 
   // Check which filename exists (only one does)
-  std::ifstream inStream;
-  std::ifstream testStream(candidates.first);
-  if (testStream.good()) {
-    inStream = std::move(testStream);
+  std::string fileId;
+  if (fileWithIDExists(candidates.first)) {
+    fileId = std::move(candidates.first);
   } else {
-    inStream = std::ifstream(candidates.second);
+    fileId = std::move(candidates.second);
   }
 
-  // Now we have the file, so read its data and return it
-  std::string buffer;
-  inStream >> std::noskipws;
-  inStream >> buffer;
-  return buffer;
+  // Now we have the correct id, so read its data and return it
+  return readFileByFileID(fileId);
 }
 
 void SIFTWriter::createImageWithKeypointsAndARPoints(
     EntityID id,
     std::vector<cv::KeyPoint> keypoints,
     const std::vector<cv::Point2f>& candidatePoints) {
+  auto image = readImageAsMatrix(computeSingleFilenameForID(id, 1));
   // Draw keypoints
-  cv::Mat imgKey1;
-
-  auto image = cv::imread(computeSingleFilenameForID(id, 1));
-
-  cv::drawKeypoints(
-      image, keypoints, imgKey1, cv::Scalar::all(-1), cv::DrawMatchesFlags::DEFAULT);
-
-  // Show detected (drawn) keypoints
-  cv::imwrite(computeSingleFilenameForID(id, 2), imgKey1);
+  for (auto& keypoint : keypoints) {
+    cv::circle(image, keypoint.pt, 6, cv::Scalar(255, 0, 0), 15);
+  }
+  // Draw candidate points
+  for (auto& candPoint : candidatePoints) {
+    cv::circle(image, candPoint, 6, cv::Scalar(0, 255, 255), 15);
+  }
+  writeImage(computeSingleFilenameForID(id, 2), image);
 }
 
 void SIFTWriter::createImageWithMachings(
@@ -91,21 +113,36 @@ void SIFTWriter::createImageWithMachings(
   auto image1File = computeSingleFilenameForID(id1, 1);
   auto image2File = computeSingleFilenameForID(id2, 1);
   // Get the image data
-  auto image1 = cv::imread(image1File);
-  auto image2 = cv::imread(image2File);
+  auto image1 = readImageAsMatrix(image1File);
+  auto image2 = readImageAsMatrix(image2File);
+
   // Draw the matches
   cv::Mat imageDrawMatches;
   cv::drawMatches(
-      image1,
-      keypoints1,
-      image2,
-      keypoints1,
-      matchings,
-      imageDrawMatches,
-      cv::Scalar::all(-1),
-      cv::Scalar::all(-1),
-      std::vector<char>(),
-      cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
-  cv::imwrite(
+      image1, keypoints1, image2, keypoints2, matchings, imageDrawMatches);
+  writeImage(
       computeCompoundFilenamesForIDs(id1, id2, stage).first, imageDrawMatches);
+}
+
+std::string SIFTWriter::base64Encode(const std::string& in) {
+  std::string out;
+
+  int val = 0, valb = -6;
+  for (unsigned char c : in) {
+    val = (val << 8) + c;
+    valb += 8;
+    while (valb >= 0) {
+      out.push_back(
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+              [(val >> valb) & 0x3F]);
+      valb -= 6;
+    }
+  }
+  if (valb > -6)
+    out.push_back(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+            [((val << 8) >> (valb + 8)) & 0x3F]);
+  while (out.size() % 4)
+    out.push_back('=');
+  return out;
 }

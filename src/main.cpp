@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
   }
 
   /******* Start Server *******/
-  auto server = std::make_unique<Server>(debugMode);
+  auto server = std::make_unique<Server>(debugMode, writeImageMode);
   server->setup();
   server->run(port);
 }

@@ -1,6 +1,7 @@
 #include "include/server/Server.hpp"
 #include <boost/algorithm/string.hpp>
 #include <fstream>
+#include <ios>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -69,6 +70,7 @@ void Server::setup() {
         if (candidatePointHeader != req.headers.end()) {
           rawCandidatePoints = candidatePointHeader->second;
         }
+
         /***** Process Candidate Points *****/
         // Parse request string into list of L2-calcuable points
         // Final collection of candidate points
@@ -88,31 +90,89 @@ void Server::setup() {
           }
         }
 
+        if (debugMode_) {
+          // Display candidate points
+          std::cout << "Candidate points\n";
+          for (auto& candidatePoint : candidatePoints) {
+            // TODO: remove me debug
+            std::cout << "Candidate point: (" << candidatePoint.x << ", "
+                      << candidatePoint.y << ")\n";
+          }
+        }
+
+        // Raw image is sent alone in request body
         std::string image = req.body;
-        // If we're writing image data
+
+        /***** Write raw image data in a separate thread *****/
+        if (writeImageMode_) {
+          // Our lambda capture list includes global copy captures because we
+          // want to detach the thread so the server can return a response more
+          // quickly, rather than blocking on file I/O while we write the image.
+          auto writeThread = std::thread([id, image]() {
+            auto writer = std::make_shared<SIFTWriter>();
+            writer->writeFileByID(
+                writer->computeSingleFilenameForID(id, 1), std::move(image));
+          });
+          writeThread.join();
+        }
+
         // Add a user to the environment or update an existing user
-        auto siftOutPoints =
+        // This call processes the image, runs SIFT, and computes
+        auto siftResult =
             environment_.updateClient(id, std::move(image), candidatePoints);
 
-        // Write raw image data in a separate thread
-        // auto writeThread = std::thread([&]() {
-        std::cout << "Write original image\n";
-        auto writer = std::make_shared<SIFTWriter>();
-        std::ofstream outStream1(writer->computeSingleFilenameForID(id, 1));
-        outStream1 << image;
-        outStream1.close();
-        std::cout << "Write keypoints and ar points\n";
-        writer->createImageWithKeypointsAndARPoints(
-            id,
-            environment_.getClientByID(id)->getKeypoints(),
-            candidatePoints);
-        // });
-        // writeThread.detach();
+        /***** Draw matches in a separate thread *****/
+        if (writeImageMode_) {
+          auto client = environment_.getClientByID(id);
+          // Draw keypoints and candidate points on the image in a separate
+          // thread The same lambda capture idea applies so the request thread
+          // can continue while we write the file
+          auto keypoints = client->getKeypoints();
+          auto drawThread = std::thread([id, keypoints, candidatePoints] {
+            auto writer = std::make_shared<SIFTWriter>();
+            writer->createImageWithKeypointsAndARPoints(
+                id, keypoints, candidatePoints);
+          });
+          drawThread.detach();
+
+          // If we have multiple clients, then we can draw matchings. This also
+          // means our SIFT result will contain good and bad matchings
+          if (client->getHomographyMap().size() > 0) {
+            auto allMatches = siftResult->allMatches;
+            auto bestMatches = siftResult->bestMatches;
+            // Pull out the other client's id and keypoints
+            auto id2 = siftResult->getOtherEntity(id);
+            auto keypoints2 = environment_.getClientByID(id2)->getKeypoints();
+            auto matchDrawThread = std::thread([=] {
+              auto writer = std::make_shared<SIFTWriter>();
+              // Write the good matches
+              writer->createImageWithMachings(
+                  id, id2, allMatches, keypoints, keypoints2, 3);
+            });
+            matchDrawThread.detach();            
+            auto bestMatchDrawThread = std::thread([=] {
+              auto writer = std::make_shared<SIFTWriter>();
+              // Write the best matches
+              writer->createImageWithMachings(
+                  id, id2, bestMatches, keypoints, keypoints2, 4);
+            });
+            bestMatchDrawThread.detach();
+          }
+        }
 
         // Format points for transport - json
         std::vector<crow::json::wvalue> pointList;
-        for (auto& aSiftPoint : siftOutPoints) {
-          pointList.push_back(mapToCrowWValue(aSiftPoint));
+        // Pull out the mapped AR points and return to the client
+        for (auto& siftARPair : siftResult->siftToARPointMapping) {
+          if (debugMode_) {
+            std::cout << PointRepresentationUtils::cvPoint2fToString(
+                             siftARPair.second)
+                      << "\n";
+          }
+          // Add to stringy version of point to response
+          pointList.push_back(
+              mapToCrowWValue(PointRepresentationUtils::cvPoint2fToStringyPoint(
+                  siftARPair.second)));
         }
         // Format JSON response
         crow::json::wvalue response;
@@ -125,8 +185,8 @@ void Server::setup() {
    *
    * @header object id: the id of the object being manipulated. Empty if a new
    * object is being created.
-   * @header location: the location of the new object or of the new position of
-   * the object being updated.
+   * @header location: the location of the new object or of the new position
+   * of the object being updated.
    * @response: the id of the new or modified object.
    */
   CROW_ROUTE(app, "/object")
@@ -163,7 +223,8 @@ void Server::setup() {
       });
 
   /**
-   * Returns a description of the augmented reality environment. This includes:
+   * Returns a description of the augmented reality environment. This
+   * includes:
    * - All AR objects as created by clients.
    *
    * @response: json payload with data
@@ -217,8 +278,8 @@ void Server::setup() {
         auto point = cv::Point2f(std::stod(pointX), std::stod(pointY));
         // Update anchor points for this client. Stores the point, computes a
         // homography and applies relevant anchor points to all clients who
-        // don't have anchor points, etc. Any clients who are polling for anchor
-        // points will receive responses once this action completes
+        // don't have anchor points, etc. Any clients who are polling for
+        // anchor points will receive responses once this action completes
         environment_.update2DAnchorForClient(id, point);
         // Empty response (endpoing returns nothing on success)
         return crow::response("");
@@ -228,15 +289,16 @@ void Server::setup() {
    * Allows a client to poll to see if they have valid anchor points. If they
    * were the first client to calibrate or were not a special client who
    * receives AR points in their response, then they will recieve a point as
-   * soon as another client has calibrated and chosen their anchor point, during
-   * which time the appropriate SIFT point local to the polling point will be
-   * computed with the original homography between the clients (which computed
-   * the first client's SIFT points, and the related best-candidate AR points).
+   * soon as another client has calibrated and chosen their anchor point,
+   * during which time the appropriate SIFT point local to the polling point
+   * will be computed with the original homography between the clients (which
+   * computed the first client's SIFT points, and the related best-candidate
+   * AR points).
    *
    * @param: entity ID - the id of the user
-   * @response: if there is no anchor available for this user, an empty response
-   * is retured. Otherwise, an object containing the 2D anchor point is returned
-   * as follows:
+   * @response: if there is no anchor available for this user, an empty
+   * response is retured. Otherwise, an object containing the 2D anchor point
+   * is returned as follows:
    * {
    *   x: [string],
    *   y: [string]
@@ -264,8 +326,8 @@ void Server::setup() {
       });
 
   /**
-   * Clears the environment of all AR users and AR objects. Equivalent to a full
-   * reset of the server
+   * Clears the environment of all AR users and AR objects. Equivalent to a
+   * full reset of the server
    */
   CROW_ROUTE(app, "/clear")
       .methods("GET"_method)([&](const crow::request& req) {
@@ -293,7 +355,7 @@ void Server::setup() {
    * Gets the image
    */
   CROW_ROUTE(app, "/imagequery")
-      .methods("GET"_method)([&](const crow::request& req) {
+      .methods("POST"_method)([&](const crow::request& req) {
         auto json = crow::json::load(req.body);
         if (!json) {
           return crow::response(400);
@@ -311,12 +373,6 @@ void Server::setup() {
         if (json.has(kImageQueryIDFieldName)) {
           // This is a single query
           auto id = json[kImageQueryIDFieldName].s();
-
-          if (debugMode_) {
-            std::cout << "Single image query for id " << id << " at stage "
-                      << stage << "\n";
-          }
-
           responseBuffer = writer->getSingleImageDataForID(id, stage);
         } else {
           // Compound query
@@ -327,11 +383,15 @@ void Server::setup() {
             std::cout << "Duplex image query for id1: " << id1
                       << ", id2: " << id2 << " at stage " << stage << "\n";
           }
-
           // Get images
           responseBuffer = writer->getCompoundImageDataForIDs(id1, id2, stage);
         }
 
-        return crow::response(responseBuffer);
+        // Return an error if the query is invalid
+        if (responseBuffer.empty()) {
+          return crow::response(500);
+        } else {
+          return crow::response(SIFTWriter::base64Encode(responseBuffer));
+        }
       });
 }

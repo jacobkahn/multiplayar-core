@@ -132,21 +132,13 @@ SIFTClient::computeHomographyTransformationFromClients(
       client2->getCandidatePoints(),
       matchings);
 
-  // Write matchings to file
-  auto thread2 = std::thread([&]() {
-    auto writer = std::make_shared<SIFTWriter>();
-    writer->createImageWithMachings(
-        client1->getID(),
-        client2->getID(),
-        goodMatches_,
-        client1->getKeypoints(),
-        client2->getKeypoints(),
-        4);
-  });
-  thread2.detach();
-
   // Make a new result
   auto result = std::make_shared<HomographyTransformResult>();
+  result->entities = std::make_pair(client1->getID(), client2->getID());
+  // Add the collection of all (non-AR-point-filtered) matchings to the result
+  result->allMatches = matchings;
+  // Add the collection of AR-point-filtered matchings to the result
+  result->bestMatches = goodMatches_;
   // The first two fields in the result are point data for client 1 and client
   // 2, respectively
   result->pointMap.emplace(

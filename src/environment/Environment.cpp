@@ -6,21 +6,16 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include "include/cv/SIFTWriter.hpp"
 #include "include/environment/Client.hpp"
 #include "include/environment/Object.hpp"
-#include "include/cv/SIFTWriter.hpp"
 
-PointList Environment::updateClient(
+std::shared_ptr<HomographyTransformResult> Environment::updateClient(
     EntityID id,
     std::string image,
     std::vector<cv::Point2f> candidatePointsRaw) {
   std::unordered_set<cv::Point2f, PointHasher> candidatePoints;
-  // TODO: delete me
-  std::cout << "Candidate points\n";
   for (auto& candidatePoint : candidatePointsRaw) {
-    // TODO: remove me debug
-    std::cout << "Candidate point: (" << candidatePoint.x << ", "
-              << candidatePoint.y << ")\n";
     candidatePoints.insert(candidatePoint);
   }
 
@@ -48,28 +43,15 @@ PointList Environment::updateClient(
         auto result = siftClient->computeHomographyTransformationFromClients(
             client, otherClient);
 
-        // TODO: remove me
-        for (auto& ent : result->pointMap) {
-          std::cout << "Entity ID with " << ent.first << "\nPoints:\n";
-          for (auto& p : ent.second) {
-            std::cout << PointRepresentationUtils::cvPoint2fToString(
-                             PointRepresentationUtils::stringyPointToPoint2f(p))
-                      << "\n";
-          }
-        }
-
         // Store the result of the homography with the other user inside the
         // mapping for this user so we can retrieve it for anchor calibration
         // later
         client->addHomographyTransformResult(otherClient->getID(), result);
         /***** Choose the closest candidate points to our output points *****/
-        // New collection of AR-kit candidate points
-        PointList bestCandidatePoints;
         // We perform a brute force algorithm over which the runtime is 4
         // times the total number of ARKit-detected points. This is a minor
         // compuation: we're simply computing an L2 metric over the point
         // set
-        std::cout << "Matching candidate points\n";
         for (auto& point : result->pointMap[id]) {
           // Look through candidate points, track the lowest current point
           double minDistance = std::numeric_limits<float>::max();
@@ -90,22 +72,16 @@ PointList Environment::updateClient(
           result->siftToARPointMapping.emplace(
               bestPoint,
               PointRepresentationUtils::stringyPointToPoint2f(point));
-          // Add best candidate point to set
-          bestCandidatePoints.push_back(
-              PointRepresentationUtils::cvPoint2fToStringyPoint(bestPoint));
-          // Print point data; TODO: remove
-          std::cout << "Matched point - p: (" << bestPoint.x << ", "
-                    << bestPoint.y << ")\n";
           // Remove this point from consideration - make sure the AR points we
           // choose are distinct
           candidatePoints.erase(candidatePoints.find(bestPoint));
         }
         // We only care about the first point list - that's the calling user's
-        return bestCandidatePoints;
+        return result;
       }
     }
   }
-  return {};
+  return std::make_shared<HomographyTransformResult>();
 }
 
 bool Environment::clientExists(const EntityID& id) {

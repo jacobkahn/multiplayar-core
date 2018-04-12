@@ -48,6 +48,9 @@
         "complex": "cpp",
         "unordered_set": "cpp",
         "streambuf": "cpp",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "sstream": "cpp",
+        "strstream": "cpp",
+        "chrono": "cpp"
     }
 }
