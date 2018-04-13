@@ -31,7 +31,6 @@ std::shared_ptr<HomographyTransformResult> Environment::updateClient(
   }
   // Score candidate points for the client
   client->setCandidatePoints(candidatePointsRaw);
-
   // Attempt to compute homography with another client
   // Make sure we're not the only client
   if (clients.size() > 1) {
@@ -42,11 +41,11 @@ std::shared_ptr<HomographyTransformResult> Environment::updateClient(
         auto siftClient = std::make_unique<SIFTClient>();
         auto result = siftClient->computeHomographyTransformationFromClients(
             client, otherClient);
-
         // Store the result of the homography with the other user inside the
         // mapping for this user so we can retrieve it for anchor calibration
         // later
         client->addHomographyTransformResult(otherClient->getID(), result);
+        
         /***** Choose the closest candidate points to our output points *****/
         // We perform a brute force algorithm over which the runtime is 4
         // times the total number of ARKit-detected points. This is a minor

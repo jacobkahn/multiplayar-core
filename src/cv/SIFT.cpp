@@ -108,22 +108,6 @@ SIFTClient::computeHomographyTransformationFromClients(
   auto matchings =
       computeMatchings(client1->getDescriptors(), client2->getDescriptors());
 
-  // Write matchings to file
-  auto thread1 = std::thread([&]() {
-    auto writer = std::make_shared<SIFTWriter>();
-    auto filenames = writer->computeCompoundFilenamesForIDs(
-        client1->getID(), client2->getID(), 3);
-    writer->createImageWithMachings(
-        client1->getID(),
-        client2->getID(),
-        goodMatches_,
-        client1->getKeypoints(),
-        client2->getKeypoints(),
-        3);
-    ;
-  });
-  thread1.detach();
-
   // Compute the homography with raw datas and return candidate points
   auto transformData = computeHomographyTransformation(
       client1->getKeypoints(),

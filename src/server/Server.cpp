@@ -101,63 +101,55 @@ void Server::setup() {
         }
 
         // Raw image is sent alone in request body
-        std::string image = req.body;
-
-        /***** Write raw image data in a separate thread *****/
-        if (writeImageMode_) {
-          // Our lambda capture list includes global copy captures because we
-          // want to detach the thread so the server can return a response more
-          // quickly, rather than blocking on file I/O while we write the image.
-          auto writeThread = std::thread([id, image]() {
-            auto writer = std::make_shared<SIFTWriter>();
-            writer->writeFileByID(
-                writer->computeSingleFilenameForID(id, 1), std::move(image));
-          });
-          writeThread.join();
-        }
-
+        std::string image = std::move(req.body);
         // Add a user to the environment or update an existing user
         // This call processes the image, runs SIFT, and computes
         auto siftResult =
-            environment_.updateClient(id, std::move(image), candidatePoints);
+            environment_.updateClient(id, image, candidatePoints);
 
-        /***** Draw matches in a separate thread *****/
+        /***** Write raw image data in a separate thread *****/
         if (writeImageMode_) {
           auto client = environment_.getClientByID(id);
-          // Draw keypoints and candidate points on the image in a separate
-          // thread The same lambda capture idea applies so the request thread
-          // can continue while we write the file
+          // Get data so we can draw keypoints and candidate points on the
+          // image in a separate thread The same lambda capture idea applies so
+          // the request thread can continue while we write the file
           auto keypoints = client->getKeypoints();
-          auto drawThread = std::thread([id, keypoints, candidatePoints] {
+          // Get match data if need be
+          bool drawMatches = client->getHomographyMap().size() > 0;
+          std::vector<cv::DMatch> allMatches, bestMatches;
+          EntityID id2;
+          std::vector<cv::KeyPoint> keypoints2;
+          if (drawMatches) {
+            // Get data needed to draw matches
+            allMatches = siftResult->allMatches;
+            bestMatches = siftResult->bestMatches;
+            // Pull out the other client's id and keypoints
+            id2 = siftResult->getOtherEntity(id);
+            keypoints2 = environment_.getClientByID(id2)->getKeypoints();
+          }
+
+          // Our lambda capture list includes global copy captures because we
+          // want to join the thread so the server can return a response more
+          // quickly, rather than blocking on file I/O while we write the image.
+          auto writeThread = std::thread([=]() {
             auto writer = std::make_shared<SIFTWriter>();
+            // Write original file
+            writer->writeFileByID(
+                writer->computeSingleFilenameForID(id, 1), std::move(image));
+            // Draw keypoints and AR points
             writer->createImageWithKeypointsAndARPoints(
                 id, keypoints, candidatePoints);
-          });
-          drawThread.detach();
-
-          // If we have multiple clients, then we can draw matchings. This also
-          // means our SIFT result will contain good and bad matchings
-          if (client->getHomographyMap().size() > 0) {
-            auto allMatches = siftResult->allMatches;
-            auto bestMatches = siftResult->bestMatches;
-            // Pull out the other client's id and keypoints
-            auto id2 = siftResult->getOtherEntity(id);
-            auto keypoints2 = environment_.getClientByID(id2)->getKeypoints();
-            auto matchDrawThread = std::thread([=] {
-              auto writer = std::make_shared<SIFTWriter>();
+            // Draw matches
+            if (drawMatches) {
               // Write the good matches
               writer->createImageWithMachings(
                   id, id2, allMatches, keypoints, keypoints2, 3);
-            });
-            matchDrawThread.detach();            
-            auto bestMatchDrawThread = std::thread([=] {
-              auto writer = std::make_shared<SIFTWriter>();
               // Write the best matches
               writer->createImageWithMachings(
                   id, id2, bestMatches, keypoints, keypoints2, 4);
-            });
-            bestMatchDrawThread.detach();
-          }
+            }
+          });
+          writeThread.detach();
         }
 
         // Format points for transport - json
