@@ -15,25 +15,6 @@
 #include "include/cv/SIFTWriter.hpp"
 #include "include/environment/Client.hpp"
 
-StringyPoint PointRepresentationUtils::cvPoint2fToStringyPoint(
-    cv::Point2f point) {
-  return {{kStringyPointXFieldName, std::to_string(point.x)},
-          {kStringyPointYFieldName, std::to_string(point.y)}};
-}
-
-cv::Point2f PointRepresentationUtils::stringyPointToPoint2f(
-    StringyPoint stringyPointMap) {
-  return cv::Point2f(
-      std::stod(stringyPointMap[kStringyPointXFieldName]),
-      std::stod(stringyPointMap[kStringyPointYFieldName]));
-}
-
-std::string PointRepresentationUtils::cvPoint2fToString(cv::Point2f point) {
-  std::string s =
-      "(" + std::to_string(point.x) + ", " + std::to_string(point.y) + ")";
-  return s;
-}
-
 // Minimum number of points we need for a homography threshold
 const size_t kMinPointsHomographyThreshold = 6;
 // Minimum number of points we need for a homography threshold
@@ -45,6 +26,24 @@ const size_t kCentralityScoreNumberOfPointComparisons = 5;
 // Number of points to return from SIFT
 const size_t kNumMatchesToReturn = 4;
 
+StringyPoint PointRepresentationUtils::cvPoint2fToStringyPoint(
+    cv::Point2f point) {
+  return {{kStringyPointXFieldName, std::to_string(point.x)},
+          {kStringyPointYFieldName, std::to_string(point.y)}};
+}
+
+cv::Point2f PointRepresentationUtils::stringyPointToPoint2f(
+    StringyPoint stringyPointMap) {
+  return cv::Point2f(
+      std::stof(stringyPointMap[kStringyPointXFieldName]),
+      std::stof(stringyPointMap[kStringyPointYFieldName]));
+}
+
+std::string PointRepresentationUtils::cvPoint2fToString(cv::Point2f point) {
+  std::string s =
+      "(" + std::to_string(point.x) + ", " + std::to_string(point.y) + ")";
+  return s;
+}
 double SIFTClient::computeCentralityScoreForPoint(
     cv::Point2f queryPoint,
     const std::vector<cv::Point2f>& candidatePoints) {
@@ -207,8 +206,6 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
     matchMaxHeap.pop();
   }
 
-  // Make sure we have enough points?
-  // TODO: stuff
   if (goodMatches.size() == 0 ||
       goodMatches.size() < kMinPointsHomographyThreshold) {
     std::cout << "Insufficient matches found for homography. Exiting.\n";
@@ -218,7 +215,7 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
 
   /***** Rank Matches based on centrality AR candidate point scores *****/
   // Pre-compute scores and place into a map
-  std::unordered_map<cv::DMatch, double, MatchHasher, MatchEquals> matchScores;
+  std::unordered_map<cv::DMatch, float, MatchHasher, MatchEquals> matchScores;
   for (auto& match : goodMatches) {
     auto score = computeCentralityScore(
         queryKeypoints[match.queryIdx].pt,
@@ -272,7 +269,6 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
   }
 
   /***** Find Homography *****/
-  // TODO: is this the right way to use ransac?
   cv::Mat QThomography =
       cv::findHomography(finalQueryKeypoints, finalTrainKeypoints);
   cv::Mat TQhomography =
@@ -388,7 +384,6 @@ void SIFTClient::runToySIFT() {
     finalTrainKeypoints.push_back(trainKeypoints[match.trainIdx].pt);
   }
   /***** Find Homography *****/
-  // TODO: is this the right way to use ransac?
   cv::Mat homography =
       cv::findHomography(finalQueryKeypoints, finalTrainKeypoints);
   std::cout << "Homography is " << homography << "\n";
@@ -417,30 +412,30 @@ void SIFTClient::runToySIFT() {
       std::vector<char>(),
       cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
 
-  //   cv::line(
-  //       imageDrawMatches,
-  //       trainWorldCorners[0] + cv::Point2f(queryImage.cols, 0),
-  //       trainWorldCorners[1] + cv::Point2f(queryImage.cols, 0),
-  //       cv::Scalar(0, 255, 0),
-  //       4);
-  //   cv::line(
-  //       imageDrawMatches,
-  //       trainWorldCorners[1] + cv::Point2f(queryImage.cols, 0),
-  //       trainWorldCorners[2] + cv::Point2f(queryImage.cols, 0),
-  //       cv::Scalar(0, 255, 0),
-  //       4);
-  //   cv::line(
-  //       imageDrawMatches,
-  //       trainWorldCorners[2] + cv::Point2f(queryImage.cols, 0),
-  //       trainWorldCorners[3] + cv::Point2f(queryImage.cols, 0),
-  //       cv::Scalar(0, 255, 0),
-  //       4);
-  //   cv::line(
-  //       imageDrawMatches,
-  //       trainWorldCorners[3] + cv::Point2f(queryImage.cols, 0),
-  //       trainWorldCorners[0] + cv::Point2f(queryImage.cols, 0),
-  //       cv::Scalar(0, 255, 0),
-  //       4);
+  cv::line(
+      imageDrawMatches,
+      trainWorldCorners[0] + cv::Point2f(queryImage.cols, 0),
+      trainWorldCorners[1] + cv::Point2f(queryImage.cols, 0),
+      cv::Scalar(0, 255, 0),
+      4);
+  cv::line(
+      imageDrawMatches,
+      trainWorldCorners[1] + cv::Point2f(queryImage.cols, 0),
+      trainWorldCorners[2] + cv::Point2f(queryImage.cols, 0),
+      cv::Scalar(0, 255, 0),
+      4);
+  cv::line(
+      imageDrawMatches,
+      trainWorldCorners[2] + cv::Point2f(queryImage.cols, 0),
+      trainWorldCorners[3] + cv::Point2f(queryImage.cols, 0),
+      cv::Scalar(0, 255, 0),
+      4);
+  cv::line(
+      imageDrawMatches,
+      trainWorldCorners[3] + cv::Point2f(queryImage.cols, 0),
+      trainWorldCorners[0] + cv::Point2f(queryImage.cols, 0),
+      cv::Scalar(0, 255, 0),
+      4);
 
   cv::imwrite("out.png", imageDrawMatches);
 }

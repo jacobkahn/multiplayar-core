@@ -94,7 +94,6 @@ void Server::setup() {
           // Display candidate points
           std::cout << "Candidate points\n";
           for (auto& candidatePoint : candidatePoints) {
-            // TODO: remove me debug
             std::cout << "Candidate point: (" << candidatePoint.x << ", "
                       << candidatePoint.y << ")\n";
           }
@@ -104,8 +103,7 @@ void Server::setup() {
         std::string image = std::move(req.body);
         // Add a user to the environment or update an existing user
         // This call processes the image, runs SIFT, and computes
-        auto siftResult =
-            environment_.updateClient(id, image, candidatePoints);
+        auto siftResult = environment_.updateClient(id, image, candidatePoints);
 
         /***** Write raw image data in a separate thread *****/
         if (writeImageMode_) {
@@ -166,6 +164,7 @@ void Server::setup() {
               mapToCrowWValue(PointRepresentationUtils::cvPoint2fToStringyPoint(
                   siftARPair.second)));
         }
+
         // Format JSON response
         crow::json::wvalue response;
         response["points"] = std::move(pointList);
@@ -195,7 +194,7 @@ void Server::setup() {
         }
 
         Location objectLocation =
-            cv::Point3d(std::stof(xLoc), std::stof(yLoc), std::stof(zLoc));
+            cv::Point3d(std::stod(xLoc), std::stod(yLoc), std::stod(zLoc));
         auto rotation = std::stof(rawRotation);
         // See if we're working with an existing object ID. If so, go forth
         // and update it: otherwise, create a new object. Always respond
@@ -210,7 +209,6 @@ void Server::setup() {
           objectID = environment_.addObject();
         }
         environment_.updateObject(objectID, objectLocation, rotation);
-        // Format JSON response
         return crow::response(objectID);
       });
 
@@ -226,9 +224,9 @@ void Server::setup() {
    *    objects: [
    *      {
    *        id: [id],
-   *        x: [double],
-   *        y: [double],
-   *        z: [double]
+   *        x: [float],
+   *        y: [float],
+   *        z: [float]
    *      }
    *    ],
    *    ...
@@ -249,7 +247,6 @@ void Server::setup() {
     // Users
     std::vector<crow::json::wvalue> userList;
     response["users"] = std::move(userList);
-    // TODO: send them a user field????
     return crow::response(response);
   });
 
@@ -267,7 +264,7 @@ void Server::setup() {
         std::string id = req.headers.find(kUserIDHeaderValueHeader)->second;
         std::string pointX = req.headers.find(kXLocationHeader)->second;
         std::string pointY = req.headers.find(kYLocationHeader)->second;
-        auto point = cv::Point2f(std::stod(pointX), std::stod(pointY));
+        auto point = cv::Point2f(std::stof(pointX), std::stof(pointY));
         // Update anchor points for this client. Stores the point, computes a
         // homography and applies relevant anchor points to all clients who
         // don't have anchor points, etc. Any clients who are polling for
@@ -344,7 +341,21 @@ void Server::setup() {
   });
 
   /**
-   * Gets the image
+   * Gets the image given a query. Follows the below specification:
+   * - Requires a "stage" key, which is an integer [1, 4]. Errors if an invalid
+   * stage is given.
+   *     - Stage 1 includes a raw image write.
+   *     - Stage 2 includes a raw image with AR points and keypoints imposed.
+   *     - Stage 3 includes an image with all matchings imposed.
+   *     - Stage 4 includes candidate point/centrality-based matchings
+   *
+   * - If the key "id" is given, then the id is used to retrieve a stage 1 or 2
+   * image.
+   * - If the keys "id1" and "id2" are given, then, regardless of ordering, a
+   * stage 3 or 4 image is returned.
+   * - Any other combination yields an error.
+   *
+   * A base64-encoded image is returned as the response body.
    */
   CROW_ROUTE(app, "/imagequery")
       .methods("POST"_method)([&](const crow::request& req) {

@@ -45,7 +45,7 @@ std::shared_ptr<HomographyTransformResult> Environment::updateClient(
         // mapping for this user so we can retrieve it for anchor calibration
         // later
         client->addHomographyTransformResult(otherClient->getID(), result);
-        
+
         /***** Choose the closest candidate points to our output points *****/
         // We perform a brute force algorithm over which the runtime is 4
         // times the total number of ARKit-detected points. This is a minor
@@ -53,7 +53,7 @@ std::shared_ptr<HomographyTransformResult> Environment::updateClient(
         // set
         for (auto& point : result->pointMap[id]) {
           // Look through candidate points, track the lowest current point
-          double minDistance = std::numeric_limits<float>::max();
+          float minDistance = std::numeric_limits<float>::max();
           cv::Point2f bestPoint;
           // Check all AR points and choose the best one
           for (auto& candidatePoint : candidatePoints) {
@@ -69,8 +69,8 @@ std::shared_ptr<HomographyTransformResult> Environment::updateClient(
           // Add the matched point to the matched point under the aggregate
           // homography data
           result->siftToARPointMapping.emplace(
-              bestPoint,
-              PointRepresentationUtils::stringyPointToPoint2f(point));
+              PointRepresentationUtils::stringyPointToPoint2f(point),
+              bestPoint);
           // Remove this point from consideration - make sure the AR points we
           // choose are distinct
           candidatePoints.erase(candidatePoints.find(bestPoint));
@@ -165,7 +165,7 @@ void Environment::update2DAnchorForClient(EntityID id, cv::Point2f point) {
       // Compute the optimal candidate point - the AR point that is closest to
       // the inverse transformed point
       cv::Point2f bestPoint;
-      double minDistance = std::numeric_limits<float>::max();
+      float minDistance = std::numeric_limits<float>::max();
       for (auto& candPoint : otherClient->getCandidatePoints()) {
         auto dist = cv::norm(cv::Mat(candPoint), cv::Mat(transformedPoint));
         if (dist < minDistance) {

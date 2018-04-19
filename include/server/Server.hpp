@@ -23,7 +23,7 @@ class Server {
   void run(uint32_t port);
 
   /**
-   * Converts an unordered map into a
+   * Converts an unordered map into a crow-json-serializable value
    */
   crow::json::wvalue mapToCrowWValue(
       std::unordered_map<std::string, std::string> map);

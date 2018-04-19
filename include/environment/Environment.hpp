@@ -65,9 +65,9 @@ class Environment {
    * [
    *    {
    *      id: [id],
-   *      x: [double],
-   *      y: [double],
-   *      z: [double]
+   *      x: [float],
+   *      y: [float],
+   *      z: [float]
    *    }
    * ]
    */

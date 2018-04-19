@@ -43,15 +43,8 @@ AnchorPoint2D Client::get2DAnchorPoint() const {
 
 void Client::update2DAnchorPoints(AnchorPoint2D point) {
   if (!initializedAnchor_) {
-    // TODO: log
-    std::cout << "Updating anchor point for client with ID " << getID()
-              << ". Anchor point is " << point << "\n";
     anchor2D_ = std::move(point);
     initializedAnchor_ = true;
-  } else {
-    // TODO: log
-    std::cout << "Attempted to update anchor point for client which"
-              << " already had anchor point\n";
   }
 }
 
