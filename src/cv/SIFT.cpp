@@ -56,7 +56,6 @@ double SIFTClient::computeCentralityScoreForPoint(
   std::priority_queue<cv::Point2f, std::vector<cv::Point2f>, decltype(cmp)>
       matchMaxHeap(cmp);
   for (size_t i = 0; i < candidatePoints.size(); i++) {
-    // std::cout << "Match distances " << filteredMatches[i].distance << "\n";
     // Add to heap
     matchMaxHeap.push(candidatePoints[i]);
     // If we're at capacity, pop the top element
@@ -191,7 +190,6 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
   std::priority_queue<cv::DMatch, std::vector<cv::DMatch>, decltype(cmp)>
       matchMaxHeap(cmp);
   for (size_t i = 0; i < filteredMatches.size(); i++) {
-    // std::cout << "Match distances " << filteredMatches[i].distance << "\n";
     // Add to heap
     matchMaxHeap.push(filteredMatches[i]);
     // If we're at capacity, pop the top element
@@ -226,16 +224,15 @@ RawHomographyData SIFTClient::computeHomographyTransformation(
   }
   // Put everything in a heap
   auto dMatchCmp = [&](cv::DMatch left, cv::DMatch right) {
-    return matchScores.at(left) > matchScores.at(right);
+    return matchScores.at(left) < matchScores.at(right);
   };
   // Make a match queue
   std::priority_queue<cv::DMatch, std::vector<cv::DMatch>, decltype(dMatchCmp)>
       matchHeap(dMatchCmp);
   for (size_t i = 0; i < goodMatches.size(); i++) {
-    // std::cout << "Match distances " << filteredMatches[i].distance << "\n";
     // Add to heap
     matchHeap.push(goodMatches[i]);
-    // If we're at capacity, pop the top element
+    // If we're at capacity, pop the top element.
     if (matchHeap.size() > kNumMatchesToReturn) {
       matchHeap.pop();
     }
@@ -355,7 +352,6 @@ void SIFTClient::runToySIFT() {
   std::priority_queue<cv::DMatch, std::vector<cv::DMatch>, decltype(cmp)>
       matchMaxHeap(cmp);
   for (size_t i = 0; i < filteredMatches.size(); i++) {
-    // std::cout << "Match distances " << filteredMatches[i].distance << "\n";
     // Add to heap
     matchMaxHeap.push(filteredMatches[i]);
     // If we're at capacity, pop the top element
